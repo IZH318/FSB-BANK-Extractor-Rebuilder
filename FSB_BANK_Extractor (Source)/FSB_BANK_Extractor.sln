@@ -7,7 +7,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FSB_BANK_Extractor_CPP", "F
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FSB_BANK_Extractor_CS", "FSB_BANK_Extractor_CS\FSB_BANK_Extractor_CS.csproj", "{07FDB9B3-F212-4082-B892-C5463810AD7C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FSB_BANK_Extractor_CS_GUI", "FSB_BANK_Extractor_CS_GUI\FSB_BANK_Extractor_CS_GUI.csproj", "{C28131C0-E9F3-4E80-86A5-DAB621C28F73}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FSB_BANK_Extractor_Rebuilder_CS_GUI", "FSB_BANK_Extractor_Rebuilder_CS_GUI\FSB_BANK_Extractor_Rebuilder_CS_GUI.csproj", "{C28131C0-E9F3-4E80-86A5-DAB621C28F73}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
