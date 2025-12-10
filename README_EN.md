@@ -1,21 +1,29 @@
-# FSB/BANK Extractor
+# FSB/BANK Extractor & Rebuilder
 
-![Capture_2025_02_19_13_50_51_945](https://github.com/user-attachments/assets/a6eca308-23af-4068-ac3a-75543cc6411f) <BR> <BR>
-<img width="786" height="593" alt="Capture_2025_11_25_19_07_50_901" src="https://github.com/user-attachments/assets/fdd07d47-476e-4b7e-b0cb-fb6732294283" /> <BR>
+<div align="center">
 
+| CLI Version (v1.x) | GUI Version (v3.x) |
+| :---: | :---: |
+| <img width="400" alt="CLI Screenshot" src="https://github.com/user-attachments/assets/a6eca308-23af-4068-ac3a-75543cc6411f"> | <img width="400" alt="GUI Screenshot" src="https://github.com/user-attachments/assets/6b1affa3-e0e6-4234-8154-e6dcbd313405"> |
 
+</div>
 
-⚠️ **This FSB/BANK Extractor was inspired by the `fsb_aud_extr.exe` program provided in the post **[FMOD FSB files extractor (through their API)](https://zenhax.com/viewtopic.php@t=1901.html)** written by id-daemon on the zenhax.com forum.** <BR> <BR>
+<BR>
 
-This program extracts audio streams from FMOD Sound Bank (.fsb) and Bank (.bank) files and saves them as Waveform Audio (.wav) files. <BR> <BR>
+This program analyzes audio streams from FMOD Sound Bank (`.fsb`) and Bank (`.bank`) files, allows navigation of their contents, and extracts them as Waveform Audio (`.wav`) files. It offers both a Command Line Interface (CLI) version and a Graphical User Interface (GUI) version. <BR> <BR>
 
-It offers both a Command Line Interface (CLI) version and a Graphical User Interface (GUI) version. <BR> <BR>
+**Starting with GUI v3.0.0**, the project has evolved beyond simple extraction to include a **'Rebuild' feature**, allowing users to replace specific audio files and repackage them. Accordingly, the project name has been changed to **FSB/BANK Extractor & Rebuilder**. <BR> <BR>
+
+⚠️ **Note:** This program is a project re-implemented in C++ and C#, inspired by the `fsb_aud_extr.exe` program written by id-daemon on the zenhax.com forum ([Post Link](https://zenhax.com/viewtopic.php@t=1901.html)). <BR> <BR>
+
+---
 
 📢 **Development Status Notice** <BR>
 Development of the **C++ (CLI)** and **C# (CLI)** versions is currently **paused**. <BR>
-If you require usage in a CLI environment, please use **[v1.1.0](https://github.com/IZH318/FSB_BANK_Extractor/releases/tag/v1.1.0)**. <BR>
+If you require usage in a CLI environment, please use the latest stable release **[v1.1.0](https://github.com/IZH318/FSB-BANK-Extractor-Rebuilder/releases/tag/v1.1.0)**. <BR>
+We will provide an update via this README if development on the CLI versions resumes in the future. <BR>
 
-We will provide an update via this README if development on the CLI versions resumes in the future.
+---
 
 <BR>
 
@@ -24,44 +32,47 @@ We will provide an update via this README if development on the CLI versions res
 - **Common Improvements**
 
    - **Extended File Handling:**
-       - **Bank File Support (.bank):**
-           - **Supports both FSB and Bank files.** (The original program only supported FSB files) <BR> <BR>
+       - **Bank File Support (.bank):** Directly analyzes and processes internal FSB data included in `.bank` files, in addition to standalone FSB files. (The original program only supported FSB files) <BR> <BR>
 
    - **Enhanced Output Control:**
        - **Various Output Directory Options:** Flexibly select WAV save locations via command line arguments or GUI options (`-res`, `-exe`, `-o` options).
-       - **Auto Sub-folder Generation:** Automatically creates sub-folders based on original filenames and sorts WAV files.
-       - **Improved WAV Filename Generation:** Uses Sub-Sound names to improve file identification and workflow efficiency.
+       - **Auto Sub-folder Generation:** Automatically creates sub-folders based on original filenames to classify and save extracted files systematically.
+       - **Improved WAV Filename Generation:** Uses internal Sub-Sound names from the FSB to improve file identification after extraction.
        - **Supports customized output, organized file structure, and efficient workflow.** <BR> <BR>
 
    - **Robust Error Handling and Verification:**
        - **Verbose Logging:** Detailed logs (via `-v` argument or GUI checkbox) support in-depth analysis and debugging.
        - **Log Levels:** Logs are classified into INFO, WARNING, and ERROR levels for efficient issue identification.
-       - **Function Names in Logs:** Logs record the function name where the error occurred, reducing debugging time.
        - **Progress Indicators (CLI & GUI):** Clear status updates via text in CLI and visual progress bars in GUI.
        - **Enhanced debugging, error tracking, and user feedback.** <BR> <BR>
 
    - **Internationalization Support:**
-       - **Full Unicode Support:** Perfect compatibility with multi-language files using UTF-8 encoding.
-       - **Enhanced Filename Compatibility:** Converts special characters unusable in filenames into compatible forms to prevent file system errors.
+       - **Full Unicode Support:** Perfect compatibility with multi-language file paths and internal sound names using UTF-8 encoding.
+       - **Enhanced Filename Compatibility:** Automatically converts special characters unusable in filenames into compatible forms to prevent file system errors.
        - **Global compatibility, data loss prevention, and broad user support.** <BR> <BR>
 
    - **Improved Code Quality and Maintainability:**
-       - **Modern Languages (C++, C#) & OOP Design:** Clean and easily extensible code base.
+       - **Modern Languages (C++, C#) & OOP Design:** Designed with Object-Oriented Programming for extensibility.
        - **Automatic Resource Management (RAII/using):** Prevents memory leaks and improves stability.
-       - **Template/Generic Programming:** Enhances code reusability and type safety.
-       - **Latest FMOD Engine:** Utilizes the latest FMOD Engine (v2.03.06) to leverage the newest features and improvements.
+       - **Latest FMOD Engine:** Utilizes the latest FMOD Engine (CLI: v2.03.06, GUI: v2.03.11) to leverage the newest features and improvements.
        - **Enhanced code quality, easy maintenance, increased program stability, and utilization of modern FMOD engine features.** <BR> <BR>
 
 - **CLI Version Improvements**
 
    - **Output Control via Command Line Options:** Flexible output directory selection via `-res`, `-exe`, and `-o` arguments.
-   - **Text-based Progress Indicator:** Provides text-based progress updates in the command line output.
+   - **Text-based Progress Indicator:** Provides text-based progress updates when processing large files.
    - **Enhanced command line control, improved CLI feedback, and optimization for CLI workflows and automation.** <BR> <BR>
 
 - **GUI Version Improvements**
 
-   - **Completely New Explorer-Style Interface:** 
-       - Abandoned the simple file list method (ListView) and introduced a **TreeView system** utilizing the **FMOD Studio API** to visually display the Event, Group, Bus, and Audio hierarchy within Bank files.
+   - **Audio Rebuild & Repacking:**
+       - Added the ability to **replace** specific audio within `.bank` or `.fsb` files with other audio files (WAV, MP3, OGG, etc.) provided by the user.
+       - Integrates with the official FMOD command-line tool `fsbankcl.exe` to stably generate FSB files compatible with the original.
+       - Introduces a **Binary Search algorithm** to automatically find the optimal compression quality that does not exceed the original file's data size.
+   - **Real-time Audio Analyzer (Tools Menu):**
+       - **Comprehensive Visualization:** Renders Waveform, Spectrum, Spectrogram, Vectorscope, and Oscilloscope in real-time.
+       - **Precision Metering:** Provides channel-specific RMS/Peak metering, Clipping counters, and DC Offset.
+       - **Loudness Analysis:** Measures LUFS (Integrated/Short-term/Momentary) and True Peak (dBTP) based on broadcasting standards like EBU R 128.
    - **Mass File Management and Index Tools:** 
        - Supports **Jump to Index** to instantly move to a specific number (Index) among thousands of audio files, and **Select Range** (e.g., `100-200`) to check multiple files at once, maximizing workflow efficiency.
    - **Audio Preview System:** 
@@ -77,15 +88,54 @@ We will provide an update via this README if development on the CLI versions res
    - **Data Management and Export:** 
        - **CSV Export:** Export the structure and detailed properties of all currently loaded files to a CSV file.
        - **Checkbox-based Extraction:** Select specific items via checkboxes to batch extract only what you need.
+       - Flexible extraction path options: 'Same as original', 'Custom fixed path', or 'Ask every time'.
+   - **User Convenience & Workflow:**
+       - **Drag & Drop:** Easily load files and folders by dragging them from Explorer into the program window.
+       - **Shortcuts:** Full support for shortcuts like Open File (`Ctrl+O`), Search (`Ctrl+F`), and Extract (`Ctrl+E`).
    - **Performance Optimization:** 
-       - **Parallel Scanning:** Introduced `Parallel.ForEach` to analyze large quantities of files/folders at high speed without UI freezing.
-       - **Resource Management:** Safely releases the FMOD system upon program exit and automatically cleans up temporary resources.
+       - **Parallel Scanning & Async Processing:** Fully adopted `Parallel.ForEach` and `async/await` to analyze large quantities of files/folders at high speed without UI freezing.
+       - **Low-level Binary Parsing:** Directly analyzes FSB headers alongside FMOD API to ensure more accurate audio data offsets and lengths for specific compression formats.
 
 <BR>
 
 ## 🔄 Update History
 
-### v2.1.0 (2025-11-26) - GUI Only
+### v3.0.0 (2025-12-09) - GUI Only
+The v3.0.0 update focuses on adding key new features and significantly improving the internal code structure. **(No changes to CLI versions)**
+
+-   #### **✨ New Features**
+    -   **Audio Rebuild & Repacking System:**
+        -   Added functionality to replace specific audio in `.bank` or `.fsb` files with user-provided audio files (WAV, MP3, etc.).
+        -   Uses the official FMOD tool `fsbankcl.exe` to generate FSB files compatible with the original.
+        -   **Binary Search Algorithm:** Automatically finds the optimal compression quality (Vorbis) that fits within the original data size limit, preventing file corruption.
+        -   (Note) Applies **Zero-Padding** automatically if the new file is smaller, perfectly maintaining the original file structure.
+    -   **Real-time Audio Analyzer:**
+        -   Added a tool to analyze playing sounds in detail. (Tools menu)
+        -   **Visualizations:** Displays Waveform, Spectrum, Spectrogram, Vectorscope, and Oscilloscope.
+        -   **Channel Metering:** Provides detailed statistics per channel, including RMS/Peak levels, Clipping counter, and DC Offset.
+        -   **Loudness Analysis:** Measures Integrated/Short-term/Momentary LUFS and True Peak (dBTP) based on major broadcast standards (e.g., EBU R 128).
+
+-   #### **🚀 Convenience Improvements**
+    -   **Extraction Path Options:** Added options to choose extraction location: 'Same as original', 'Custom fixed path', or 'Ask every time'.
+    -   **Audio Length Validation:** Added a warning feature during rebuild if the replacement audio is longer than the original, which could cause playback errors (cutting off, loop breaking) in-game. Provides an option to **force save as a standalone file (.fsb)** if size is exceeded.
+    -   **Context Menu Improvements:** Reorganized the right-click menu to show only relevant options (Extract, Rebuild, Copy GUID, etc.) based on the selected item type.
+
+-   #### **🛠️ Internal Structure Improvements**
+    -   **Async/Await Implementation:** Converted time-consuming I/O operations like file loading, extraction, and rebuilding to asynchronous methods, preventing UI freezes during large tasks.
+    -   **Code Modularity:** Separated UI logic into distinct forms (`IndexToolForm`, etc.) and applied polymorphism to the `NodeData` class to improve code structure for future maintenance.
+    -   **Timer Logic Update:** Switched to a high-precision background timer (`System.Threading.Timer`) to optimize FMOD engine updates and UI refreshing, reducing system load.
+
+-   #### **⚡ Performance & Stability**
+    -   **Low-level Binary Parsing:** Modified to read FSB headers directly instead of relying solely on the FMOD API, ensuring more accurate audio data offsets and lengths for certain compression formats.
+    -   **Error Handling & Logging:** Improved exception handling to automatically generate detailed error logs with stack traces. Detailed error log files are now **automatically created upon error**, regardless of the Verbose option.
+
+<br>
+
+<details>
+<summary>📜 Previous Updates - Click to Expand</summary>
+<br>
+<details>
+<summary>v2.1.0 (2025-11-26) - GUI Only</summary>
 Reflecting user requests and feedback, features have been added to **maximize the efficiency of managing large numbers of audio files**. **(No changes to CLI versions)**
 
 -   #### **🔧 Index Tools**
@@ -101,14 +151,10 @@ Reflecting user requests and feedback, features have been added to **maximize th
 -   #### **🛠 Other Improvements**
     -   **Improved Safety:** Enhanced exception handling to display guidance messages when attempting invalid operations on empty containers or parent nodes without audio files.
     -   **Help Updated:** Descriptions for new features (Index Tools, Context Menu) have been added to the Help (F1).
-
-<br>
+</details>
 
 <details>
-<summary>📜 Previous Updates - Click to Expand</summary>
-<br>
-<details>
-<summary>v2.0.0 (2025-11-25)</summary>
+<summary>v2.0.0 (2025-11-25) - GUI Only</summary>
 The GUI version has been revamped from a simple 'extractor' to a comprehensive <b>'FMOD Audio Analysis Tool'</b>. <b>(No changes to CLI versions)</b><br><br>
 
 -   #### **🖥️ Interface and Experience**
@@ -130,7 +176,7 @@ The GUI version has been revamped from a simple 'extractor' to a comprehensive <
 
 -   #### **⚡ Performance and Optimization**
     -   **Parallel Loading System**: Applied `Parallel.ForEach` multi-threading for folder loading to drastically reduce analysis time for thousands of files.
-    -   **Search Optimization**: Applied an input delay (Debounce) timer to reduce unnecessary calculations and improve response speed during search input.
+    -   **Search Optimization**: Improved response speed for search input.
     -   **Memory Leak Prevention**: Strengthened the cleanup process to forcibly release FMOD system resources and clear temporary resources upon program exit (`OnFormClosing`).
     -   **FMOD Studio API Integration**: Upgraded the engine to use Studio API alongside the Core API to analyze event structures in Bank files.
 
@@ -138,8 +184,6 @@ The GUI version has been revamped from a simple 'extractor' to a comprehensive <
     -   **Shortcuts**: `Ctrl+O` (Open File), `Ctrl+Shift+O` (Open Folder), `Ctrl+E` (Extract Checked), `Ctrl+Shift+E` (Extract All), `Ctrl+Shift+C` (Export CSV), `Ctrl+F` (Search), `F1` (Help).
     -   **Context Menu**: Right-click tree nodes to access Play, Stop, Extract, and Copy Name/Path/GUID options.
 
--   #### **ℹ️ Misc**
-    -   **Program Info Update**: Program version updated to `2.0.0`, and some developer information display has been modified.
 </details>
 
 <details>
@@ -151,11 +195,8 @@ This update focused on preventing data loss during file extraction and significa
 -   #### **🛠️ Improvements and Fixes**
     -   **File Overwrite Prevention**: Previously, if multiple sub-sounds had the same name within a single FSB/BANK file, files would be overwritten, causing data loss. Now, numeric suffixes like `_1`, `_2` are automatically appended to ensure all sounds are safely extracted with unique filenames.
     -   **Extraction Logic Refactoring**: Refactored filename generation and path handling logic to increase stability and robustly support new features (tag-based folder creation, overwrite prevention).
-    -   **Program Info Update**: Program version updated to `1.1.0`, and developer information display has been modified.
--   #### **📄 License**
-    -   **License Change**: The project license has been changed to **GNU General Public License v3.0**.
-
 </details>
+
 <details>
 <summary>v1.0.0 (2025-02-19)</summary>
    
@@ -172,29 +213,99 @@ This update focused on preventing data loss during file extraction and significa
 |----------------------------------------|----------------------------------------------------|----------|------------------------------------------------------------------------------------------------|
 | `.NET Framework 4.8`             | [Download](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48)   | Optional | ◼ (Install if errors occur) For GUI use |
 | `Visual Studio 2022 (v143)`            | [Download](https://visualstudio.microsoft.com/)   | Optional | ◼ (Developers only) For Solution/Project work |
-| `FMOD Engine (v2.03.06)`             | [Download](https://www.fmod.com/download#fmodengine)   | Optional | ◼ (Developers only) For using FMOD API |
+| `FMOD Engine (v2.03.11)`             | [Download](https://www.fmod.com/download#fmodengine)   | Optional | ◼ (Developers only) For building source; `api` folder and libraries (`fmod.dll`, etc.) from FMOD SDK are required. |
 
 <BR>
 
 ## 🛠️ Development Environment
 
 **[ Common ]**
-
 1. **OS: Windows 10 Pro 22H2 (x64)** <BR>
+2. **IDE: Visual Studio 2022 (v143)** <BR> <BR>
 
-2. **IDE: Visual Studio 2022 (v143)** <BR>
+**[ FMOD File Setup for Project Build ]**
+- This repository does not contain FMOD API source code or binary files, in accordance with FMOD licensing policies.
+- To successfully build the project, you must manually download the FMOD Studio API and copy the required files to each project folder. <BR> <BR>
 
-3. **API: FMOD Engine (v2.03.06)** <BR> <BR>
+1.  **Download FMOD Studio API:**
+    -   Download and install `FMOD Engine (v2.03.06)` or `FMOD Engine (v2.03.11)` via the link in the 'Download' section above. <BR>
+    -   (Default install path: `C:\Program Files (x86)\FMOD SoundSystem\FMOD Studio API Windows`) <BR> <BR>
 
-**[ C++ CLI Version ]**
+2.  **Copy Required Files:**
+    -   Locate the files listed below in the FMOD installation directory and copy them into each `FSB_BANK_Extractor\` project folder. <BR> <BR>
 
+    | Filename | Source Path (Based on FMOD Install Folder) | `CS` | `CS_GUI` |
+    |---|---|:---:|:---:|
+    | **fmod.cs** | `api\core\inc` | O | O |
+    | **fmod_dsp.cs** | `api\core\inc` | O | O |
+    | **fmod_errors.cs** | `api\core\inc` | O | O |
+    | **fmod_studio.cs** | `api\studio\inc` | | O |
+    | **fmod.dll** | `api\core\lib\x86` | O | O |
+    | **fmodL.dll** | `api\core\lib\x86` | O | |
+    | **fmodstudio.dll** | `api\studio\lib\x86` | | O |
+    | **fsbankcl.exe** | `bin` | | O |
+    | **libfsbvorbis64.dll** | `bin` | | O |
+    | **opus.dll** | `bin` | | O |
+    | **Qt6Core.dll** | `bin` | | O |
+    | **Qt6Gui.dll** | `bin` | | O |
+    | **Qt6Network.dll** | `bin` | | O |
+    | **Qt6Widgets.dll** | `bin` | | O |
+    <BR>
+
+3.  **Confirm Final Folder Structure:**
+    -   If all files are copied correctly, the key file structure should look like this:
+    -   (The list below omits some auto-generated files like `*.Designer.cs`, `*.resx`, and `bin`/`obj` folders for clarity, focusing on `FSB_BANK_Extractor_Rebuilder_CS_GUI`.) <BR> <BR>
+
+    ```
+    FSB_BANK_Extractor_Rebuilder_CS_GUI/
+    │
+    ├─ App.config
+    ├─ packages.config
+    │
+    ├─ FSB_BANK_Extractor_CS_GUI.csproj
+    ├─ FSB_BANK_Extractor_CS_GUI.cs
+    ├─ AudioAnalyzerForm.cs
+    ├─ HelpForm.cs
+    ├─ IndexToolForm.cs
+    ├─ RebuildOptionsForm.cs
+    ├─ Program.cs
+    │
+    ├─ FMOD_LICENSE.TXT
+    ├─ unboxing_Edit.ico
+    │
+    ├─ # FMOD C# Wrapper Files (Must be copied)
+    ├─ fmod.cs
+    ├─ fmod_dsp.cs
+    ├─ fmod_errors.cs
+    ├─ fmod_studio.cs
+    │
+    ├─ # FMOD Runtime Binaries (Must be copied)
+    ├─ fmod.dll
+    ├─ fmodstudio.dll
+    │
+    ├─ # FMOD Bank Tool & Dependencies (Must be copied)
+    ├─ fsbankcl.exe
+    ├─ libfsbvorbis64.dll
+    ├─ opus.dll
+    ├─ Qt6Core.dll
+    ├─ Qt6Gui.dll
+    ├─ Qt6Network.dll
+    └─ Qt6Widgets.dll
+    ```
+
+**[ C++ CLI and C# CLI Versions ]**
+- **API: FMOD Engine (v2.03.06)** <BR>
 - Desktop development with C++ workload required <BR>
 - C++ Compiler set to ISO C++17 Standard <BR>
+- .NET desktop development workload required <BR>
 - Windows SDK Version 10.0 (Latest installed version) <BR> <BR>
 
-**[ C# CLI Version and GUI Version ]**
-
-- .NET desktop development workload required <BR>
+**[ C# GUI Version ]**
+- **API: FMOD Engine (v2.03.11)**
+- **Required NuGet Packages:**
+  - **Newtonsoft.Json:** This project uses the Newtonsoft.Json package. It is **automatically installed** when building the solution for the first time in Visual Studio.
+  - If a build error occurs, right-click the solution in **Solution Explorer** and select **'Restore NuGet Packages'**, or use `Update-Package -reinstall` in the **Package Manager Console**.
+- .NET desktop development workload required
 - C# Compiler targeted for .NET Framework 4.8
 
 <BR>
@@ -247,11 +358,11 @@ This update focused on preventing data loss during file extraction and significa
 
 **[ ===== FSB_BANK_Extractor_CS_GUI (C# GUI Version) ===== ]**
 
-<img width="786" height="593" alt="Capture_2025_11_25_19_07_50_901" src="https://github.com/user-attachments/assets/fdd07d47-476e-4b7e-b0cb-fb6732294283" /> <BR> <BR>
+<img width="786" height="593" src="https://github.com/user-attachments/assets/6b1affa3-e0e6-4234-8154-e6dcbd313405" /> <BR> <BR>
 
-1. Run the `FSB_BANK_Extractor_CS_GUI.exe` file. <BR> <BR>
+**1. Run the `FSB_BANK_Extractor_CS_GUI.exe` file.** <BR> <BR>
 
-2. **GUI Operation**:
+**2. GUI Operation**:
 
    - **Loading Files and Folders**:
       - Click **`File` > `Open File...`** or **`Open Folder...`** in the top menu to load files.
@@ -259,18 +370,32 @@ This update focused on preventing data loss during file extraction and significa
       - **[ 💡 Note ]** If filenames appear as encrypted GUIDs, load a `.strings.bank` file along with them, or use the **`File` > `Load Strings Bank (Manual)...`** menu. <BR> <BR>
 
    - **Navigation and Preview**:
-      - **Structure Explorer**: Check the internal event structure of the Bank in the left Tree View.
-      - **Search Filter**: Enter text in the top **Search** bar to filter the list and show only matching items.
-      - **Details**: Click an item to view information such as format, channels, and loop points in the right **Details** panel.
-      - **Audio Playback**: Use the `Play(▶)`, `Stop(■)` buttons, volume slider, and `Force Loop` option in the bottom panel to verify sounds before extraction. <BR> <BR>
+      - **Structure Explorer**: Check the internal actual hierarchy (Events, Buses, Audio) of the Bank in the left Tree View.
+      - **Search Filter**: Enter text in the top **Search** bar to filter the list and show only matching items. Right-clicking an item in the search results and selecting **`Open File Location`** moves to the original location in the Tree View, and allows for **immediate extraction or rebuilding**.
+      - **Index Tools**: Right-click an FSB/Bank node and run **`Index Tools...`** to jump to a specific index number (`Jump to Index`) or check multiple items at once by specifying a range (`Select Range`, e.g., `100-200, 305`).
+      - **Details**: Click an item to view real-time information such as format, channels, and loop points in the right **Details** panel.
+      - **Audio Playback**: Use the `Play(▶)`, `Stop(■)` buttons, seek bar, volume slider, and `Loop` checkbox in the bottom panel to verify sounds before extraction. If `Auto-Play` is checked, audio plays automatically upon selection.
+      - **Data Copy**: **Right-click** items in the Tree View or Search Results to easily copy the Name (`Copy Name`), Full Path (`Copy Path`), or GUID (`Copy GUID`) to the clipboard.
+      - **Tree View Control**: Right-click anywhere and use **`Expand All`** or **`Collapse All`** to open or close all folders at once. <BR> <BR>
+   
+   - **Audio Rebuild (Replace)**:
+      - <img width="386" height="253" alt="image" src="https://github.com/user-attachments/assets/f8460282-065c-4baa-8a16-24d8e7698059" />
+      - **Start Rebuild**: **Right-click** the audio file you want to replace and select **`Rebuild Sound with fsbankcl...`**.
+      - **Select File & Options**: Choose the new audio file (WAV, MP3, etc.) and specify the compression format (Vorbis, FADPCM, PCM) in the options window.
+      - **Auto-Optimization (Vorbis Only)**: The program **automatically optimizes** the compression quality to fit the original file's data size, ensuring safe replacement without corrupting the file structure. <BR> <BR>
 
    - **File Extraction**:
-      - **Selective Extraction**: Select the **checkboxes** of desired items in the **Structure Explorer (Tree View)** or **Search Result List**. Then click **`File` > `Extract Checked...`** to specify a save folder. (Shortcut: `Ctrl + E`)
+      - **Set Extraction Path**: Select the default save location from the combo box at the bottom right: 'Same as Original', 'Custom Path', or 'Ask Every Time'.
+      - **Selective Extraction**: Check the **checkboxes** of desired items in the **Structure Explorer** (Tree View) or **Search Result List**. Then click **`File` > `Extract Checked...`** to specify a save folder. (Shortcut: `Ctrl + E`)
       - **Extract All**: Click **`File` > `Extract All...`** to extract all currently loaded items at once. (Shortcut: `Ctrl + Shift + E`) <BR> <BR>
 
-   - **Other Options**:
+   - **Analysis Tools & Other Options**:
+      - **Real-time Audio Analyzer**:
+         - <img width="706" height="513" alt="image" src="https://github.com/user-attachments/assets/b17f9845-60f5-46ec-ba9c-f0e41239b235" />
+         - Click **`Tools` > `Audio Analyzer...`** in the top menu to open the analysis window. You can check professional data such as Waveform, FFT Spectrum, **LUFS**, and **True Peak (dBTP)** in real-time during playback.
       - **CSV Export**: Save the file list as an Excel-compatible file via **`File` > `Export List to CSV...`**. (Shortcut: `Ctrl + Shift + C`)
-      - **Verbose Logging**: Enable the **`Verbose Log Save`** checkbox at the bottom to save detailed logs of the extraction process to a file. <BR> <BR>
+      - **Verbose Logging**: Enable the **`Verbose Log`** checkbox at the bottom to save detailed logs of the extraction or rebuild process to a file.
+      - **Help & Info**: Check the full feature description via **`File` > `Help`** (or `F1`), and view version info in **`File` > `About`**. <BR>
 
 <BR>
 
@@ -290,7 +415,7 @@ This update focused on preventing data loss during file extraction and significa
       - **License:** The **FMOD_LICENSE.TXT** file contains the definitive license terms for the FMOD Engine in this project.
       - **Non-Commercial Use:** This project may be used only for personal, educational, or hobby purposes, and is licensed for non-commercial use under the terms of the attached **FMOD_LICENSE.TXT**. It cannot be used for commercial purposes, revenue generation, or any form of monetary gain.
       - **Attribution (When Distributing the Program):** If you distribute a program built with the FMOD Engine for non-commercial purposes permitted by the license, you must include the "FMOD" and "Firelight Technologies Pty Ltd." attribution within the program as specified in the general FMOD EULA and **FMOD_LICENSE.TXT** file.
-      - **Redistribution Restrictions:** Redistribution of FMOD Engine components in this project follows the terms specified in the **FMOD_LICENSE.TXT** file and the general FMOD EULA. generally, only runtime libraries are allowed for redistribution in a non-commercial context. <BR> <BR>
+      - **Redistribution Restrictions:** Redistribution of FMOD Engine components in this project follows the terms specified in the **FMOD_LICENSE.TXT** file and the general FMOD EULA. Generally, only runtime libraries are allowed for redistribution in a non-commercial context. <BR> <BR>
 
 - **Icons Used in This Project:**
 
@@ -315,3 +440,4 @@ This update focused on preventing data loss during file extraction and significa
     -   Suggested range selection based on Sub-Sound Index, the ability to jump directly to an index, and the feature to open file locations from search results.
 -   **[immortalx74](https://github.com/immortalx74)**
     -   Suggested the necessity of multi-selection for bulk file processing. We referred to this feedback to implement the Sub-Sound Index range selection feature.
+    -   Suggested the core principle of the Rebuild feature for replacing audio data. The idea that "the replacement sound must be the same size or smaller than the original, and replaced at the binary level while maintaining the original index" provided the decisive basis for implementing the current stable Rebuild system.
