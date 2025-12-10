@@ -217,7 +217,7 @@ GUI 버전이 단순한 '추출기'를 넘어, <b>'FMOD 오디오 종합 분석 
 |----------------------------------------|----------------------------------------------------|----------|------------------------------------------------------------------------------------------------|
 | `.NET Framework 4.8`             | [Download](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48)   | 선택     | ◼ (오류 발생시 설치) GUI 사용 |
 | `Visual Studio 2022 (v143)`            | [Download](https://visualstudio.microsoft.com/)   | 선택     | ◼ (개발자용) 솔루션(프로젝트) 작업 |
-| `FMOD Engine (v2.03.11)`             | [Download](https://www.fmod.com/download#fmodengine)   | 선택     | ◼ (개발자용) 소스 빌드 시 FMOD SDK의 `api` 폴더와 라이브러리 파일(`fmod.dll` 등)이 필요합니다. |
+| `FMOD Engine API`             | [Download](https://www.fmod.com/download#fmodengine)   | 선택     | ◼ (개발자용) 소스 빌드 시 FMOD SDK의 `api` 폴더와 라이브러리 파일(`fmod.dll` 등)이 필요합니다. |
 
 <BR>
 
@@ -389,7 +389,7 @@ GUI 버전이 단순한 '추출기'를 넘어, <b>'FMOD 오디오 종합 분석 
       - **자동 최적화 (Vorbis 옵션 전용)**: 프로그램이 원본 파일의 데이터 크기에 맞춰 압축 품질을 **자동으로 최적화**하여 파일 구조 손상 없이 안전하게 오디오를 교체하고 새 파일로 저장합니다. <BR> <BR>
 
    - **파일 추출**:
-      - **추출 경로 설정**: 메인 화면 우측 하단의 콤보박스에서 추출 파일이 저장될 기본 위치를 '원본과 동일한 경로', '사용자 지정 경로', '매번 묻기' 중에서 선택합니다.
+      - **추출 경로 설정**: 메인 화면 우측 하단의 콤보박스에서 추출 파일이 저장될 기본 위치를 '원본과 동일한 경로(Same as source file)', '사용자 지정 경로(Custom path)', '매번 묻기(Ask every time)' 중에서 선택합니다.
       - **선택 추출**: **Structure Explorer**(트리 뷰) 또는 **검색 결과 리스트**에서 원하는 항목의 **체크박스**를 선택합니다. 이후 **`File` > `Extract Checked...`** 를 클릭하여 저장할 폴더를 지정합니다. (단축키: `Ctrl + E`)
       - **전체 추출**: **`File` > `Extract All...`** 를 클릭하여 현재 로드된 모든 항목을 한 번에 추출합니다. (단축키: `Ctrl + Shift + E`) <BR> <BR>
 
