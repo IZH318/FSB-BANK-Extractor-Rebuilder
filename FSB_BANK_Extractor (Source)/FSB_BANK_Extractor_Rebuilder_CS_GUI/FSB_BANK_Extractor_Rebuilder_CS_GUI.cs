@@ -1874,6 +1874,10 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         private void CmbExtractLocation_SelectedIndexChanged(object sender, EventArgs e)
         {
+            // Retrieve the previous index from the Tag property. Default to 0 (Same as source) if not set.
+            // This allows us to revert to the specific previous selection (e.g., AskEveryTime) on cancellation.
+            int previousIndex = (cmbExtractLocation.Tag is int idx) ? idx : 0;
+
             var selectedMode = (ExtractLocationMode)cmbExtractLocation.SelectedIndex;
 
             if (selectedMode == ExtractLocationMode.CustomPath)
@@ -1891,14 +1895,26 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     {
                         _customExtractPath = fbd.SelectedPath;
                         lblStatus.Text = $"[INFO] Custom extraction path set to: {_customExtractPath}";
+
+                        // Successfully changed, so update the history (Tag) to the current new mode.
+                        cmbExtractLocation.Tag = (int)selectedMode;
                     }
                     else
                     {
-                        // Revert to a safer default if the user cancels the path selection.
-                        cmbExtractLocation.SelectedIndex = (int)ExtractLocationMode.AskEveryTime;
+                        // User cancelled. Revert to the previous selection.
                         lblStatus.Text = "[INFO] Custom path selection cancelled.";
+
+                        // Reverting the index will trigger this event handler again recursively.
+                        // In the recursive call, it will hit the 'else' block below and ensure the Tag matches the reverted state.
+                        // If the previous state was CustomPath (re-selection), it stays CustomPath.
+                        cmbExtractLocation.SelectedIndex = previousIndex;
                     }
                 }
+            }
+            else
+            {
+                // For any other selection, simply update the 'previous' state history.
+                cmbExtractLocation.Tag = (int)selectedMode;
             }
         }
 
