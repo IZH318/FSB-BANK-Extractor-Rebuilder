@@ -213,11 +213,107 @@ GUI 버전이 단순한 '추출기'를 넘어, <b>'FMOD 오디오 종합 분석 
 <BR>
 
 ## 💾 다운로드 <BR>
+**⚠️ 저작권 및 라이선스 정책 준수를 위해, 이 리포지토리와 배포 파일에는 FMOD API 관련 소스 코드 및 바이너리 파일이 포함되어 있지 않습니다.** <br>
+프로그램을 **개발(Dev)** 하거나 **사용(Build)** 하려면, 아래 표를 참고하여 필요한 파일들을 직접 해당 폴더에 복사해야 합니다. <BR>
+
 | Program                                | URL                                                | 필수여부 | 비고                                                                                           |
 |----------------------------------------|----------------------------------------------------|----------|------------------------------------------------------------------------------------------------|
 | `.NET Framework 4.8`             | [Download](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48)   | 선택     | ◼ (오류 발생시 설치) GUI 사용 |
 | `Visual Studio 2022 (v143)`            | [Download](https://visualstudio.microsoft.com/)   | 선택     | ◼ (개발자용) 솔루션(프로젝트) 작업 |
-| `FMOD Engine API`             | [Download](https://www.fmod.com/download#fmodengine)   | 선택     | ◼ (개발자용) 소스 빌드 시 FMOD SDK의 `api` 폴더와 라이브러리 파일(`fmod.dll` 등)이 필요합니다. |
+| `FMOD Engine API`             | [Download](https://www.fmod.com/download#fmodengine)   | **필수**     | ◼ (공통) 소스 빌드 및 프로그램 실행 시 FMOD SDK의 `api` 폴더와 `bin` 폴더 파일이 필요합니다. |
+
+<BR>
+
+**[ FMOD 파일 배치 현황표 ]**
+- **FMOD API 다운로드 경로:** `C:\Program Files (x86)\FMOD SoundSystem\FMOD Studio API Windows` (기본값)
+- **O 표기:** 해당 환경에서 정상 작동하기 위해 사용자가 직접 파일을 복사해 넣어야 함을 의미합니다.
+
+| 파일명 | 원본 경로 (FMOD 설치 폴더 기준) | `CS` | `CS_GUI` | `CS_GUI (Build)` |
+|---|---|:---:|:---:|:---:|
+| **fmod.cs** | `api\core\inc` | O | O | |
+| **fmod_dsp.cs** | `api\core\inc` | O | O | |
+| **fmod_errors.cs** | `api\core\inc` | O | O | |
+| **fmod_studio.cs** | `api\studio\inc` | | O | |
+| **fmod.dll** | `api\core\lib\x86` | O | O | O |
+| **fmodL.dll** | `api\core\lib\x86` | O | | |
+| **fmodstudio.dll** | `api\studio\lib\x86` | | O | O |
+| **fsbankcl.exe** | `bin` | | O | O |
+| **libfsbvorbis64.dll** | `bin` | | O | O |
+| **opus.dll** | `bin` | | O | O |
+| **Qt6Core.dll** | `bin` | | O | O |
+| **Qt6Gui.dll** | `bin` | | O | O |
+| **Qt6Network.dll** | `bin` | | O | O |
+| **Qt6Widgets.dll** | `bin` | | O | O |
+
+<BR>
+
+**[ 1. 개발 환경 폴더 구조 예시 (Project) ]** <BR>
+소스 코드를 수정하거나 빌드하기 위해 `FSB_BANK_Extractor_Rebuilder_CS_GUI` 프로젝트 폴더를 구성할 때의 모습입니다.
+
+```text
+FSB_BANK_Extractor_Rebuilder_CS_GUI/
+│
+├─ App.config
+├─ packages.config
+│
+├─ FSB_BANK_Extractor_CS_GUI.csproj
+├─ FSB_BANK_Extractor_CS_GUI.cs
+├─ AudioAnalyzerForm.cs
+├─ HelpForm.cs
+├─ IndexToolForm.cs
+├─ RebuildOptionsForm.cs
+├─ Program.cs
+│
+├─ FMOD_LICENSE.TXT
+├─ unboxing_Edit.ico
+│
+├─ # FMOD C# Wrapper Files (복사 필요)
+├─ fmod.cs
+├─ fmod_dsp.cs
+├─ fmod_errors.cs
+├─ fmod_studio.cs
+│
+├─ # FMOD Runtime Binaries (복사 필요)
+├─ fmod.dll
+├─ fmodstudio.dll
+│
+├─ # FMOD Bank Tool & Dependencies (복사 필요)
+├─ fsbankcl.exe
+├─ libfsbvorbis64.dll
+├─ opus.dll
+├─ Qt6Core.dll
+├─ Qt6Gui.dll
+├─ Qt6Network.dll
+└─ Qt6Widgets.dll
+```
+
+<BR>
+
+**[ 2. 실행 환경 폴더 구조 예시 (Build / Release) ]** <BR>
+프로그램을 다운로드하여 실제로 사용할 때(ZIP 해제 후)의 폴더 모습입니다.
+사용자는 아래 목록에 있는 `dll` 및 `exe` 파일들을 직접 구해서 넣어야 합니다.
+
+```text
+(사용자 임의 폴더)/
+│
+├─ FSB_BANK_Extractor_Rebuilder_CS_GUI.exe
+├─ FMOD_LICENSE.TXT
+├─ README.txt
+├─ Newtonsoft.Json.dll
+│
+├─ # FMOD Runtime Binaries (FMOD Engine 설치 폴더에서 복사)
+├─ fmod.dll
+├─ fmodstudio.dll
+│
+├─ # FMOD Bank Tool & Dependencies (FMOD Engine 설치 폴더에서 복사)
+├─ fsbankcl.exe
+├─ libfsbvorbis64.dll
+├─ opus.dll
+├─ Qt6Core.dll
+├─ Qt6Gui.dll
+├─ Qt6Network.dll
+└─ Qt6Widgets.dll
+```
 
 <BR>
 
@@ -226,76 +322,6 @@ GUI 버전이 단순한 '추출기'를 넘어, <b>'FMOD 오디오 종합 분석 
 **[ 공통 ]**
 1. **OS: Windows 10 Pro 22H2 (x64)** <BR>
 2. **IDE: Visual Studio 2022 (v143)** <BR> <BR>
-
-**[ 프로젝트 빌드를 위한 FMOD 파일 설정 ]**
-- 이 리포지토리에는 FMOD 라이선스 정책에 따라 FMOD API 관련 소스 코드 및 바이너리 파일이 포함되어 있지 않습니다.
-- 프로젝트를 성공적으로 빌드하려면, FMOD Studio API를 직접 다운로드하여 필요한 파일들을 각 프로젝트 폴더에 복사해야 합니다. <BR> <BR>
-
-1.  **FMOD Studio API 다운로드:**
-    -   위 '다운로드' 섹션의 링크를 통해 `FMOD Engine (v2.03.06)` 또는 `FMOD Engine (v2.03.11)`을 다운로드하여 설치합니다. <BR>
-    -   (기본 설치 경로: `C:\Program Files (x86)\FMOD SoundSystem\FMOD Studio API Windows`) <BR> <BR>
-
-2.  **필수 파일 복사:**
-    -   FMOD 설치 경로에서 아래 목록의 파일들을 찾아 `FSB_BANK_Extractor\` 각 프로젝트 폴더 안에 복사하십시오. <BR> <BR>
-
-    | 파일명 | 원본 경로 (FMOD 설치 폴더 기준) | `CS` | `CS_GUI` |
-    |---|---|:---:|:---:|
-    | **fmod.cs** | `api\core\inc` | O | O |
-    | **fmod_dsp.cs** | `api\core\inc` | O | O |
-    | **fmod_errors.cs** | `api\core\inc` | O | O |
-    | **fmod_studio.cs** | `api\studio\inc` | | O |
-    | **fmod.dll** | `api\core\lib\x86` | O | O |
-    | **fmodL.dll** | `api\core\lib\x86` | O | |
-    | **fmodstudio.dll** | `api\studio\lib\x86` | | O |
-    | **fsbankcl.exe** | `bin` | | O |
-    | **libfsbvorbis64.dll** | `bin` | | O |
-    | **opus.dll** | `bin` | | O |
-    | **Qt6Core.dll** | `bin` | | O |
-    | **Qt6Gui.dll** | `bin` | | O |
-    | **Qt6Network.dll** | `bin` | | O |
-    | **Qt6Widgets.dll** | `bin` | | O |
-    <BR>
-
-3.  **최종 폴더 구조 확인:**
-    -   모든 파일을 정상적으로 복사했다면, 폴더 내의 주요 파일 구성은 아래와 같아집니다.
-    -   (아래 목록은 설명을 위해 `FSB_BANK_Extractor_Rebuilder_CS_GUI` 폴더를 기준으로 `*.Designer.cs`, `*.resx`와 같은 일부 자동 생성 파일과 `bin`, `obj` 폴더를 생략하고 핵심 파일 중심으로 나열되었습니다.) <BR> <BR>
-
-    ```
-    FSB_BANK_Extractor_Rebuilder_CS_GUI/
-    │
-    ├─ App.config
-    ├─ packages.config
-    │
-    ├─ FSB_BANK_Extractor_CS_GUI.csproj
-    ├─ FSB_BANK_Extractor_CS_GUI.cs
-    ├─ AudioAnalyzerForm.cs
-    ├─ HelpForm.cs
-    ├─ IndexToolForm.cs
-    ├─ RebuildOptionsForm.cs
-    ├─ Program.cs
-    │
-    ├─ FMOD_LICENSE.TXT
-    ├─ unboxing_Edit.ico
-    │
-    ├─ # FMOD C# Wrapper Files (복사 필요)
-    ├─ fmod.cs
-    ├─ fmod_dsp.cs
-    ├─ fmod_errors.cs
-    ├─ fmod_studio.cs
-    │
-    ├─ # FMOD Runtime Binaries (복사 필요)
-    ├─ fmod.dll
-    ├─ fmodstudio.dll
-    │
-    ├─ # FMOD Bank Tool & Dependencies (복사 필요)
-    ├─ fsbankcl.exe
-    ├─ libfsbvorbis64.dll
-    ├─ opus.dll
-    ├─ Qt6Core.dll
-    ├─ Qt6Gui.dll
-    ├─ Qt6Network.dll
-    └─ Qt6Widgets.dll
-    ```
 
 **[ C++ CLI 및 C# CLI 버전 ]**
 - **API: FMOD Engine (v2.03.06)** <BR>
