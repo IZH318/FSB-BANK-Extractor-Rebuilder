@@ -129,11 +129,11 @@ The v3.0.0 update focuses on adding key new features and significantly improving
     -   **Low-level Binary Parsing:** Modified to read FSB headers directly instead of relying solely on the FMOD API, ensuring more accurate audio data offsets and lengths for certain compression formats.
     -   **Error Handling & Logging:** Improved exception handling to automatically generate detailed error logs with stack traces. Detailed error log files are now **automatically created upon error**, regardless of the Verbose option.
 
-<br>
+<BR>
 
 <details>
 <summary>📜 Previous Updates - Click to Expand</summary>
-<br>
+<BR>
 <details>
 <summary>v2.1.0 (2025-11-26) - GUI Only</summary>
 Reflecting user requests and feedback, features have been added to **maximize the efficiency of managing large numbers of audio files**. **(No changes to CLI versions)**
@@ -155,7 +155,7 @@ Reflecting user requests and feedback, features have been added to **maximize th
 
 <details>
 <summary>v2.0.0 (2025-11-25) - GUI Only</summary>
-The GUI version has been revamped from a simple 'extractor' to a comprehensive <b>'FMOD Audio Analysis Tool'</b>. <b>(No changes to CLI versions)</b><br><br>
+The GUI version has been revamped from a simple 'extractor' to a comprehensive <b>'FMOD Audio Analysis Tool'</b>. <b>(No changes to CLI versions)</b><BR><BR>
 
 -   #### **🖥️ Interface and Experience**
     -   **Structure Explorer Introduced**: Replaced the flat list view with a tree view interface that perfectly visualizes the internal hierarchy of FMOD Banks.
@@ -213,7 +213,7 @@ This update focused on preventing data loss during file extraction and significa
 |----------------------------------------|----------------------------------------------------|----------|------------------------------------------------------------------------------------------------|
 | `.NET Framework 4.8`             | [Download](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48)   | Optional | ◼ (Install if errors occur) For GUI use |
 | `Visual Studio 2022 (v143)`            | [Download](https://visualstudio.microsoft.com/)   | Optional | ◼ (Developers only) For Solution/Project work |
-| `FMOD Engine (v2.03.11)`             | [Download](https://www.fmod.com/download#fmodengine)   | Optional | ◼ (Developers only) For building source; `api` folder and libraries (`fmod.dll`, etc.) from FMOD SDK are required. |
+| `FMOD Engine API`             | [Download](https://www.fmod.com/download#fmodengine)   | Optional | ◼ (Developers only) For building source; `api` folder and libraries (`fmod.dll`, etc.) from FMOD SDK are required. |
 
 <BR>
 
@@ -385,7 +385,7 @@ This update focused on preventing data loss during file extraction and significa
       - **Auto-Optimization (Vorbis Only)**: The program **automatically optimizes** the compression quality to fit the original file's data size, ensuring safe replacement without corrupting the file structure. <BR> <BR>
 
    - **File Extraction**:
-      - **Set Extraction Path**: Select the default save location from the combo box at the bottom right: 'Same as Original', 'Custom Path', or 'Ask Every Time'.
+      - **Set Extraction Path**: Select the default save location from the combo box at the bottom right: 'Same as source file', 'Custom path', or 'Ask every time'.
       - **Selective Extraction**: Check the **checkboxes** of desired items in the **Structure Explorer** (Tree View) or **Search Result List**. Then click **`File` > `Extract Checked...`** to specify a save folder. (Shortcut: `Ctrl + E`)
       - **Extract All**: Click **`File` > `Extract All...`** to extract all currently loaded items at once. (Shortcut: `Ctrl + Shift + E`) <BR> <BR>
 
