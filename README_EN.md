@@ -206,14 +206,108 @@ This update focused on preventing data loss during file extraction and significa
 </details>
 </details>
 
+## 💾 Download <BR>
+**⚠️ To comply with copyright and licensing policies, this repository and distribution files do not contain FMOD API source code or binary files.** <br>
+To **Develop (Dev)** or **Use (Build)** the program, you must manually copy the necessary files to the appropriate folders by referring to the table below. <BR>
+
+| Program                                | URL                                                | Requirement | Note                                                                                           |
+|----------------------------------------|----------------------------------------------------|----------|------------------------------------------------------------------------------------------------|
+| `.NET Framework 4.8`             | [Download](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48)   | Optional | ◼ (Install on error) GUI Usage |
+| `Visual Studio 2022 (v143)`            | [Download](https://visualstudio.microsoft.com/)   | Optional | ◼ (For Developers) Solution/Project Build |
+| `FMOD Engine API`             | [Download](https://www.fmod.com/download#fmodengine)   | **Required** | ◼ (Common) FMOD SDK 'api' folder and library files ('fmod.dll', etc.) are required for source build and program execution. |
+
 <BR>
 
-## 💾 Download <BR>
-| Program                                | URL                                                | Required | Remarks                                                                                        |
-|----------------------------------------|----------------------------------------------------|----------|------------------------------------------------------------------------------------------------|
-| `.NET Framework 4.8`             | [Download](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48)   | Optional | ◼ (Install if errors occur) For GUI use |
-| `Visual Studio 2022 (v143)`            | [Download](https://visualstudio.microsoft.com/)   | Optional | ◼ (Developers only) For Solution/Project work |
-| `FMOD Engine API`             | [Download](https://www.fmod.com/download#fmodengine)   | Optional | ◼ (Developers only) For building source; `api` folder and libraries (`fmod.dll`, etc.) from FMOD SDK are required. |
+**[ FMOD File Placement Table ]**
+- **FMOD API Download Path:** `C:\Program Files (x86)\FMOD SoundSystem\FMOD Studio API Windows` (Default)
+- **O Mark:** Indicates that the user must manually copy the file for the environment to work properly.
+
+| Filename | Source Path (Based on FMOD Install Folder) | `CS` | `CS_GUI` | `CS_GUI (Build)` |
+|---|---|:---:|:---:|:---:|
+| **fmod.cs** | `api\core\inc` | O | O | |
+| **fmod_dsp.cs** | `api\core\inc` | O | O | |
+| **fmod_errors.cs** | `api\core\inc` | O | O | |
+| **fmod_studio.cs** | `api\studio\inc` | | O | |
+| **fmod.dll** | `api\core\lib\x86` | O | O | O |
+| **fmodL.dll** | `api\core\lib\x86` | O | | |
+| **fmodstudio.dll** | `api\studio\lib\x86` | | O | O |
+| **fsbankcl.exe** | `bin` | | O | O |
+| **libfsbvorbis64.dll** | `bin` | | O | O |
+| **opus.dll** | `bin` | | O | O |
+| **Qt6Core.dll** | `bin` | | O | O |
+| **Qt6Gui.dll** | `bin` | | O | O |
+| **Qt6Network.dll** | `bin` | | O | O |
+| **Qt6Widgets.dll** | `bin` | | O | O |
+
+<BR>
+
+**[ 1. Development Environment Folder Structure Example (Project) ]** <BR>
+This is the folder structure when configuring the `FSB_BANK_Extractor_Rebuilder_CS_GUI` project folder for modifying source code or building.
+
+```text
+FSB_BANK_Extractor_Rebuilder_CS_GUI/
+│
+├─ App.config
+├─ packages.config
+│
+├─ FSB_BANK_Extractor_CS_GUI.csproj
+├─ FSB_BANK_Extractor_CS_GUI.cs
+├─ AudioAnalyzerForm.cs
+├─ HelpForm.cs
+├─ IndexToolForm.cs
+├─ RebuildOptionsForm.cs
+├─ Program.cs
+│
+├─ FMOD_LICENSE.TXT
+├─ unboxing_Edit.ico
+│
+├─ # FMOD C# Wrapper Files (Copy Required)
+├─ fmod.cs
+├─ fmod_dsp.cs
+├─ fmod_errors.cs
+├─ fmod_studio.cs
+│
+├─ # FMOD Runtime Binaries (Copy Required)
+├─ fmod.dll
+├─ fmodstudio.dll
+│
+├─ # FMOD Bank Tool & Dependencies (Copy Required)
+├─ fsbankcl.exe
+├─ libfsbvorbis64.dll
+├─ opus.dll
+├─ Qt6Core.dll
+├─ Qt6Gui.dll
+├─ Qt6Network.dll
+└─ Qt6Widgets.dll
+```
+
+<BR>
+
+**[ 2. Execution Environment Folder Structure Example (Build / Release) ]** <BR>
+This is the folder structure when downloading and actually using the program (after unzipping).
+Users must manually obtain and place the `dll` and `exe` files listed below.
+
+```text
+(User Defined Folder)/
+│
+├─ FSB_BANK_Extractor_Rebuilder_CS_GUI.exe
+├─ FMOD_LICENSE.TXT
+├─ README.txt
+├─ Newtonsoft.Json.dll
+│
+├─ # FMOD Runtime Binaries (Copy from FMOD Engine Install Folder)
+├─ fmod.dll
+├─ fmodstudio.dll
+│
+├─ # FMOD Bank Tool & Dependencies (Copy from FMOD Engine Install Folder)
+├─ fsbankcl.exe
+├─ libfsbvorbis64.dll
+├─ opus.dll
+├─ Qt6Core.dll
+├─ Qt6Gui.dll
+├─ Qt6Network.dll
+└─ Qt6Widgets.dll
+```
 
 <BR>
 
@@ -222,76 +316,6 @@ This update focused on preventing data loss during file extraction and significa
 **[ Common ]**
 1. **OS: Windows 10 Pro 22H2 (x64)** <BR>
 2. **IDE: Visual Studio 2022 (v143)** <BR> <BR>
-
-**[ FMOD File Setup for Project Build ]**
-- This repository does not contain FMOD API source code or binary files, in accordance with FMOD licensing policies.
-- To successfully build the project, you must manually download the FMOD Studio API and copy the required files to each project folder. <BR> <BR>
-
-1.  **Download FMOD Studio API:**
-    -   Download and install `FMOD Engine (v2.03.06)` or `FMOD Engine (v2.03.11)` via the link in the 'Download' section above. <BR>
-    -   (Default install path: `C:\Program Files (x86)\FMOD SoundSystem\FMOD Studio API Windows`) <BR> <BR>
-
-2.  **Copy Required Files:**
-    -   Locate the files listed below in the FMOD installation directory and copy them into each `FSB_BANK_Extractor\` project folder. <BR> <BR>
-
-    | Filename | Source Path (Based on FMOD Install Folder) | `CS` | `CS_GUI` |
-    |---|---|:---:|:---:|
-    | **fmod.cs** | `api\core\inc` | O | O |
-    | **fmod_dsp.cs** | `api\core\inc` | O | O |
-    | **fmod_errors.cs** | `api\core\inc` | O | O |
-    | **fmod_studio.cs** | `api\studio\inc` | | O |
-    | **fmod.dll** | `api\core\lib\x86` | O | O |
-    | **fmodL.dll** | `api\core\lib\x86` | O | |
-    | **fmodstudio.dll** | `api\studio\lib\x86` | | O |
-    | **fsbankcl.exe** | `bin` | | O |
-    | **libfsbvorbis64.dll** | `bin` | | O |
-    | **opus.dll** | `bin` | | O |
-    | **Qt6Core.dll** | `bin` | | O |
-    | **Qt6Gui.dll** | `bin` | | O |
-    | **Qt6Network.dll** | `bin` | | O |
-    | **Qt6Widgets.dll** | `bin` | | O |
-    <BR>
-
-3.  **Confirm Final Folder Structure:**
-    -   If all files are copied correctly, the key file structure should look like this:
-    -   (The list below omits some auto-generated files like `*.Designer.cs`, `*.resx`, and `bin`/`obj` folders for clarity, focusing on `FSB_BANK_Extractor_Rebuilder_CS_GUI`.) <BR> <BR>
-
-    ```
-    FSB_BANK_Extractor_Rebuilder_CS_GUI/
-    │
-    ├─ App.config
-    ├─ packages.config
-    │
-    ├─ FSB_BANK_Extractor_CS_GUI.csproj
-    ├─ FSB_BANK_Extractor_CS_GUI.cs
-    ├─ AudioAnalyzerForm.cs
-    ├─ HelpForm.cs
-    ├─ IndexToolForm.cs
-    ├─ RebuildOptionsForm.cs
-    ├─ Program.cs
-    │
-    ├─ FMOD_LICENSE.TXT
-    ├─ unboxing_Edit.ico
-    │
-    ├─ # FMOD C# Wrapper Files (Must be copied)
-    ├─ fmod.cs
-    ├─ fmod_dsp.cs
-    ├─ fmod_errors.cs
-    ├─ fmod_studio.cs
-    │
-    ├─ # FMOD Runtime Binaries (Must be copied)
-    ├─ fmod.dll
-    ├─ fmodstudio.dll
-    │
-    ├─ # FMOD Bank Tool & Dependencies (Must be copied)
-    ├─ fsbankcl.exe
-    ├─ libfsbvorbis64.dll
-    ├─ opus.dll
-    ├─ Qt6Core.dll
-    ├─ Qt6Gui.dll
-    ├─ Qt6Network.dll
-    └─ Qt6Widgets.dll
-    ```
 
 **[ C++ CLI and C# CLI Versions ]**
 - **API: FMOD Engine (v2.03.06)** <BR>
