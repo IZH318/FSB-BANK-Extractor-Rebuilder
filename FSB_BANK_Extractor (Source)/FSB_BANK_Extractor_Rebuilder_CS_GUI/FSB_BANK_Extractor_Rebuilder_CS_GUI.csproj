@@ -6,8 +6,8 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{C28131C0-E9F3-4E80-86A5-DAB621C28F73}</ProjectGuid>
     <OutputType>WinExe</OutputType>
-    <RootNamespace>FSB_BANK_Extractor_CS_GUI</RootNamespace>
-    <AssemblyName>FSB_BANK_Extractor_CS_GUI</AssemblyName>
+    <RootNamespace>FSB_BANK_Extractor_Rebuilder_CS_GUI</RootNamespace>
+    <AssemblyName>FSB_BANK_Extractor_Rebuilder_CS_GUI</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <LangVersion>latest</LangVersion>
@@ -109,6 +109,7 @@
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
     </Compile>
     <EmbeddedResource Include="RebuildOptionsForm.resx">
       <DependentUpon>RebuildOptionsForm.cs</DependentUpon>

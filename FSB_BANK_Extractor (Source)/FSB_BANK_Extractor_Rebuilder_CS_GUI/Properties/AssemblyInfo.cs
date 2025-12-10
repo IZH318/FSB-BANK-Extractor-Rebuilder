@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyDescription("FSB/BANK Extractor & Rebuilder (GUI)")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("(Github) IZH318")]
-[assembly: AssemblyProduct("FSB/BANK Extractor CS (GUI)")]
+[assembly: AssemblyProduct("FSB/BANK Extractor & Rebuilder (GUI)")]
 [assembly: AssemblyCopyright("Copyright (C) 2025 (Github) IZH318")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]

@@ -23,7 +23,7 @@
 *  - Target Framework: .NET Framework 4.8
 *  - Key Dependencies: Newtonsoft.Json (Required for manifest generation)
 *  - Primary Test Platform: Windows 10 64-bit
-*  - Last Update: 2025-12-09
+*  - Last Update: 2025-12-10
 */
 
 using System;
@@ -73,7 +73,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
         // Application Metadata & Versioning Constants.
         private const string AppVersion = "3.0.0";
-        private const string AppLastUpdate = "2025-12-09";
+        private const string AppLastUpdate = "2025-12-10";
         private const string AppDeveloper = "(GitHub) IZH318";
         private const string AppWebsite = "https://github.com/IZH318";
 
@@ -758,11 +758,12 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 {
                     if (!failedFiles.IsEmpty)
                     {
-                        string logFileName = await WriteErrorLogAsync(failedFiles);
+                        // Centralized error logging for file loading failures.
+                        string logFileName = await LogOperationErrorAsync("File Loading", failedFiles);
                         MessageBox.Show(
                             this,
                             $"{failedFiles.Count} errors occurred during the file loading process.\n\n" +
-                            $"Please review the following log file for details:\n" +
+                            $"All errors have been recorded in the following log file:\n" +
                             $"{logFileName}",
                             "File Load Error",
                             MessageBoxButtons.OK,
@@ -855,158 +856,129 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
         /// <summary>
         /// Analyzes a .bank file to find and list embedded FSB5 audio containers.
+        /// It uses a memory-efficient streaming approach to handle large files.
         /// </summary>
         /// <param name="path">The file path of the .bank file.</param>
         /// <param name="root">The root TreeNode to populate with results.</param>
         private void AnalyzeBankFile(string path, TreeNode root)
         {
             if (_isClosing) return;
+            // Use the modern NodeData structure from the New code.
             root.Tag = new BankNode(path);
 
             var fsbOffsets = new List<uint>();
 
-            using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            try
             {
-                if (fs.Length < 64) return; // File is too small to contain a valid FSB header.
-
-                byte[] buffer = new byte[FILE_READ_BUFFER_SIZE];
-                int bytesRead;
-                long position = 0;
-
-                while ((bytesRead = fs.Read(buffer, 0, buffer.Length)) > 0)
+                // Adopt the memory-efficient streaming method from the Old code.
+                using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
-                    for (int i = 0; i < bytesRead - 3; i++)
-                    {
-                        // Check for the "FSB5" signature in the buffer.
-                        if (buffer[i] == 'F' && buffer[i + 1] == 'S' && buffer[i + 2] == 'B' && buffer[i + 3] == '5')
-                        {
-                            long currentOffset = position + i;
+                    if (fs.Length < 64) return;
 
-                            // Validate that the signature belongs to a valid FSB header.
-                            if (IsValidFsbHeader(fs, currentOffset))
+                    byte[] buffer = new byte[FILE_READ_BUFFER_SIZE];
+                    int bytesRead;
+
+                    // Scan the file chunk by chunk.
+                    while ((bytesRead = fs.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        long bufferStartOffset = fs.Position - bytesRead;
+
+                        for (int i = 0; i < bytesRead - 3; i++)
+                        {
+                            if (buffer[i] == 'F' && buffer[i + 1] == 'S' && buffer[i + 2] == 'B' && buffer[i + 3] == '5')
                             {
-                                fsbOffsets.Add((uint)currentOffset);
+                                // Validate using the buffer to prevent stream position conflicts.
+                                if (IsValidFsbHeader(buffer, i))
+                                {
+                                    fsbOffsets.Add((uint)(bufferStartOffset + i));
+                                }
                             }
                         }
-                    }
 
-                    // Move back slightly to handle signatures that span across buffer boundaries.
-                    if (fs.Position < fs.Length)
-                    {
-                        long seekPos = fs.Position - 64;
-                        if (seekPos < 0) seekPos = 0;
-                        fs.Seek(seekPos, SeekOrigin.Begin);
-                        position = fs.Position;
-                    }
-                    else
-                    {
-                        position += bytesRead;
+                        // Seek back to handle signatures that might span across buffer boundaries.
+                        if (fs.Position < fs.Length)
+                        {
+                            fs.Seek(-60, SeekOrigin.Current);
+                        }
                     }
                 }
             }
+            catch (IOException) { return; } // Handle file access errors.
+
 
             if (fsbOffsets.Count == 0) return;
 
-            // Handle cases with single or multiple FSBs within the bank file.
-            if (fsbOffsets.Count == 1 && CountSubSounds(path, fsbOffsets[0]) > 1)
-            {
-                ParseFsbFromSource(path, fsbOffsets[0], root);
-            }
-            else
-            {
-                HashSet<string> usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                int fallbackIndex = 1;
+            // The rest of the logic uses the New code's structure for creating nodes.
+            HashSet<string> usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int fallbackIndex = 1;
 
-                foreach (var offset in fsbOffsets)
+            foreach (var offset in fsbOffsets)
+            {
+                string rawName = GetFsbInternalName(path, offset);
+                string baseName = !string.IsNullOrEmpty(rawName) ?
+                    Path.GetFileNameWithoutExtension(rawName) :
+                    Path.GetFileNameWithoutExtension(path);
+
+                if (string.IsNullOrEmpty(rawName))
                 {
-                    string rawName = GetFsbInternalName(path, offset);
-                    string baseName = !string.IsNullOrEmpty(rawName) ?
-                        Path.GetFileNameWithoutExtension(rawName) :
-                        Path.GetFileNameWithoutExtension(path);
-
-                    if (string.IsNullOrEmpty(rawName))
-                    {
-                        if (fallbackIndex > 1) baseName += $"_{fallbackIndex}";
-                    }
-
-                    string finalName = baseName + ".fsb";
-                    int dupeCounter = 1;
-
-                    // Resolve any potential name collisions.
-                    while (usedNames.Contains(finalName))
-                    {
-                        finalName = $"{baseName}_{dupeCounter}.fsb";
-                        dupeCounter++;
-                    }
-
-                    usedNames.Add(finalName);
-                    fallbackIndex++;
-
-                    TreeNode fsbNode = new TreeNode(finalName, ImageIndex.Folder, ImageIndex.Folder);
-                    fsbNode.Tag = new FsbFileNode(path, offset);
-                    root.Nodes.Add(fsbNode);
-
-                    ParseFsbFromSource(path, offset, fsbNode);
+                    if (fallbackIndex > 1) baseName += $"_{fallbackIndex}";
                 }
+
+                string finalName = baseName + ".fsb";
+                int dupeCounter = 1;
+
+                // Resolve any potential name collisions.
+                while (usedNames.Contains(finalName))
+                {
+                    finalName = $"{baseName}_{dupeCounter++}.fsb";
+                }
+
+                usedNames.Add(finalName);
+                fallbackIndex++;
+
+                // Create nodes using the New code's specific NodeData-derived classes.
+                TreeNode fsbNode = new TreeNode(finalName, ImageIndex.Folder, ImageIndex.Folder);
+                fsbNode.Tag = new FsbFileNode(path, offset);
+                root.Nodes.Add(fsbNode);
+
+                ParseFsbFromSource(path, offset, fsbNode);
             }
         }
 
         /// <summary>
-        /// Validates if the data at a given offset corresponds to a valid FSB5 header.
+        /// Validates if the data at a given index within a buffer corresponds to a valid FSB5 header.
         /// </summary>
-        /// <param name="fs">The FileStream of the file being analyzed.</param>
-        /// <param name="offset">The offset within the stream where the potential header starts.</param>
+        /// <param name="buffer">The byte array buffer containing the file chunk.</param>
+        /// <param name="index">The starting index within the buffer where the potential header starts.</param>
         /// <returns>true if the header is valid; otherwise, false.</returns>
-        private bool IsValidFsbHeader(FileStream fs, long offset)
+        private bool IsValidFsbHeader(byte[] buffer, int index)
         {
-            long originalPosition = fs.Position; // Save the current stream position.
             try
             {
-                // Ensure there is enough data remaining in the stream to read a full header.
-                if (offset + 64 > fs.Length)
+                // Ensure there is enough data remaining in the buffer to read key fields.
+                if (index + 24 > buffer.Length) // Minimum size needed to read key fields
                 {
                     return false;
                 }
 
-                fs.Seek(offset, SeekOrigin.Begin);
-                using (var br = new BinaryReader(fs, Encoding.ASCII, true))
+                // Header fields are read for logical validation.
+                int numSamples = BitConverter.ToInt32(buffer, index + 8);
+
+                // A negative sample count is a definitive sign of invalid data.
+                if (numSamples < 0)
                 {
-                    // Re-verify the signature.
-                    if (new string(br.ReadChars(4)) != "FSB5") return false;
-
-                    int version = br.ReadInt32();
-                    int numSamples = br.ReadInt32();
-                    uint sampleHeadersSize = br.ReadUInt32();
-                    uint dataSize = br.ReadUInt32();
-
-                    // Perform simple sanity checks on header values.
-                    if (numSamples < 0 || numSamples > 10000) return false;
-
-                    // Check if the declared sizes exceed the total file size.
-                    if (offset + sampleHeadersSize + dataSize > fs.Length + 1024)
-                    {
-                        return false;
-                    }
-
-                    // Check for suspicious zero-value sizes when samples are present.
-                    if (numSamples > 0 && sampleHeadersSize == 0 && dataSize == 0)
-                    {
-                        return false;
-                    }
+                    return false;
                 }
 
-                // The header is likely valid if all checks pass.
                 return true;
             }
             catch
             {
+                // Any exception during reading indicates an invalid structure.
                 return false;
             }
-            finally
-            {
-                fs.Seek(originalPosition, SeekOrigin.Begin); // Restore the original stream position.
-            }
         }
+
 
         /// <summary>
         /// Analyzes a standalone .fsb file and populates the given root node.
@@ -2169,12 +2141,12 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             progressBar.Style = ProgressBarStyle.Blocks;
             _processedFilesCount = 0;
             _totalFilesToScan = extractList.Count;
-            int failedCount = 0;
             long totalExtractedBytes = 0;
+            var failedExtractions = new ConcurrentBag<(string Context, Exception ex)>();
 
             _scanStopwatch.Restart();
 
-            // Initialize the logger inside the target root directory with detailed session info.
+            // Initialize the logger only if verbose logging is enabled.
             if (chkVerboseLog.Checked)
             {
                 string logFile = Path.Combine(targetRoot, $"ExtractionLog_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
@@ -2202,28 +2174,47 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 foreach (var treeNode in extractList)
                 {
                     var audioNode = treeNode.Tag as AudioDataNode;
+                    var audioInfo = audioNode.CachedAudio;
 
                     // Update the status text in the UI.
                     int currentCount = Interlocked.Increment(ref _processedFilesCount);
                     int percent = (_totalFilesToScan > 0) ? (currentCount * 100 / _totalFilesToScan) : 0;
-                    string containerName = Path.GetFileName(audioNode.CachedAudio.SourcePath);
-                    string itemName = audioNode.CachedAudio.Name;
-                    string statusText = $"[EXTRACTING] [{currentCount}/{_totalFilesToScan}] ({percent}%) | {containerName} -> {itemName}";
+                    string statusText = $"[EXTRACTING] [{currentCount}/{_totalFilesToScan}] ({percent}%) | {Path.GetFileName(audioInfo.SourcePath)} -> {audioInfo.Name}";
                     this.BeginInvoke((MethodInvoker)delegate { lblStatus.Text = statusText; });
 
-                    // Calculate the relative sub-path to avoid creating redundant folders.
-                    string subPath = "";
-                    if (treeNode.Parent != null && treeNode.Parent.Tag is FsbFileNode)
+                    try
                     {
-                        subPath = SanitizeFileName(treeNode.Parent.Text);
+                        // Calculate the relative sub-path to avoid creating redundant folders.
+                        string subPath = "";
+                        if (treeNode.Parent != null && treeNode.Parent.Tag is FsbFileNode)
+                        {
+                            subPath = SanitizeFileName(treeNode.Parent.Text);
+                        }
+
+                        string finalDir = string.IsNullOrEmpty(subPath) ? targetRoot : Path.Combine(targetRoot, subPath);
+                        Directory.CreateDirectory(finalDir);
+
+                        // Extract a single audio item.
+                        string outputPath = Path.Combine(finalDir, SanitizeFileName(audioInfo.Name) + ".wav");
+                        Stopwatch sw = Stopwatch.StartNew();
+                        long writtenBytes = await ExtractSingleWavAsync(audioInfo, outputPath);
+                        sw.Stop();
+
+                        // Log to verbose log if enabled.
+                        if (writtenBytes >= 0)
+                        {
+                            string formatInfo = $"{audioInfo.Format}/{audioInfo.Channels}ch/{audioInfo.Bits}bit";
+                            string loopInfo = $"{audioInfo.LoopStart}-{audioInfo.LoopEnd}";
+                            string offsetInfo = $"0x{audioInfo.DataOffset:X}";
+                            _logger?.LogTSV(LogWriter.LogLevel.INFO, Path.GetFileName(audioInfo.SourcePath), audioInfo.Name, "OK", formatInfo, loopInfo, offsetInfo, audioInfo.LengthMs.ToString(), outputPath, sw.ElapsedMilliseconds.ToString());
+                            Interlocked.Add(ref totalExtractedBytes, writtenBytes);
+                        }
                     }
-
-                    string finalDir = string.IsNullOrEmpty(subPath) ? targetRoot : Path.Combine(targetRoot, subPath);
-                    Directory.CreateDirectory(finalDir);
-
-                    var (success, bytesWritten) = await ExtractItemWithLogAsync(audioNode, finalDir);
-                    if (!success) Interlocked.Increment(ref failedCount);
-                    Interlocked.Add(ref totalExtractedBytes, bytesWritten);
+                    catch (Exception ex)
+                    {
+                        // Add any exceptions to the failure list for centralized error logging.
+                        failedExtractions.Add((audioInfo.Name, ex));
+                    }
                 }
             });
 
@@ -2231,7 +2222,9 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             _isWorking = false;
             _isScanning = false;
             _scanStopwatch.Stop();
+            int failedCount = failedExtractions.Count;
 
+            // Dispose the verbose logger if it was created.
             if (_logger != null)
             {
                 _logger.WriteRaw("");
@@ -2241,6 +2234,16 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 _logger.WriteRaw($"[INFO] Total Elapsed Time: {_scanStopwatch.Elapsed.TotalSeconds:F2} seconds");
                 _logger.Dispose();
                 _logger = null;
+            }
+
+            // If any errors occurred, write them to the central error log.
+            if (!failedExtractions.IsEmpty)
+            {
+                string errorLogPath = await LogOperationErrorAsync("Audio Extraction", failedExtractions);
+                MessageBox.Show(this,
+                    $"{failedCount} errors occurred during extraction.\n\n" +
+                    $"Details have been saved to the error log:\n{errorLogPath}",
+                    "Extraction Errors", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
 
             progressBar.Value = 100;
@@ -2264,7 +2267,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Extracts a single audio item and writes a log entry for the operation.
+        /// Extracts a single audio item and writes a log entry for the operation if verbose logging is enabled.
         /// </summary>
         /// <param name="audioNode">The AudioDataNode of the item to extract.</param>
         /// <param name="outputDir">The directory where the WAV file will be saved.</param>
@@ -2359,7 +2362,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// </summary>
         /// <param name="info">The AudioInfo for the sound to be extracted.</param>
         /// <param name="outputPath">The full path where the WAV file will be saved.</param>
-        /// <returns>The number of bytes written, or -1 on failure.</returns>
+        /// <returns>The number of bytes written to the file.</returns>
         private async Task<long> ExtractSingleWavAsync(AudioInfo info, string outputPath)
         {
             Sound s = new Sound();
@@ -2368,17 +2371,16 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
             try
             {
+                // This method now throws exceptions on FMOD/IO errors.
+                // This allows the caller to catch and log them centrally.
                 await Task.Run(() =>
                 {
                     lock (_coreSystemLock)
                     {
                         CREATESOUNDEXINFO ex = new CREATESOUNDEXINFO { cbsize = Marshal.SizeOf(typeof(CREATESOUNDEXINFO)), fileoffset = (uint)info.FileOffset };
 
-                        if (_coreSystem.createSound(info.SourcePath, MODE.CREATESTREAM | MODE.OPENONLY, ref ex, out s) != RESULT.OK)
-                        {
-                            _logger?.WriteRaw($"[ERROR] FMOD createSound failed for {info.SourcePath}");
-                            return; // Exit the background task.
-                        }
+                        RESULT res = _coreSystem.createSound(info.SourcePath, MODE.CREATESTREAM | MODE.OPENONLY, ref ex, out s);
+                        if (res != RESULT.OK) throw new Exception($"FMOD createSound failed for {info.SourcePath} with error: {res}");
 
                         s.getNumSubSounds(out int num);
                         if (info.Index < num) s.getSubSound(info.Index, out sub);
@@ -2412,8 +2414,8 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             }
             catch (Exception ex)
             {
-                _logger?.WriteRaw($"[ERROR] Exception in ExtractSingleWavAsync: {ex.Message} | File: {info.Name}");
-                bytesWritten = -1;
+                // Re-throw the exception to be caught by the calling method for central logging.
+                throw new Exception($"Failed to extract '{info.Name}': {ex.Message}", ex);
             }
             finally
             {
@@ -2581,29 +2583,34 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         private async void extractContextMenuItem_Click(object sender, EventArgs e)
         {
+            var selectedNode = treeViewInfo.SelectedNode;
+            string finalDir = string.Empty; // Declare outside the try block for logging purposes.
+
             try
             {
-                var selectedNode = treeViewInfo.SelectedNode;
                 if (selectedNode?.Tag is AudioDataNode data)
                 {
                     using (var fbd = new FolderBrowserDialog { Description = "Select a folder to extract the audio file into." })
                     {
                         if (fbd.ShowDialog() == DialogResult.OK)
                         {
+                            // Construct the final output path.
                             string baseOutputDir = fbd.SelectedPath;
                             string subPath = GetExtractionSubPath(selectedNode);
-                            string finalDir = Path.Combine(baseOutputDir, subPath);
+                            finalDir = Path.Combine(baseOutputDir, subPath);
                             Directory.CreateDirectory(finalDir);
 
                             string finalFilePath = Path.Combine(finalDir, SanitizeFileName(selectedNode.Text) + ".wav");
 
-                            bool success = await ExtractSingleWavAsync(data.CachedAudio, finalFilePath) >= 0;
-                            if (success)
+                            // Extract the audio data to a .wav file.
+                            long bytesWritten = await ExtractSingleWavAsync(data.CachedAudio, finalFilePath);
+                            if (bytesWritten >= 0)
                             {
                                 MessageBox.Show($"File successfully saved to:\n{finalFilePath}", "Extraction Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
                             }
                             else
                             {
+                                // This path is unlikely to be hit as errors throw exceptions, but is kept for robustness.
                                 MessageBox.Show("Failed to extract audio file.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                             }
                         }
@@ -2612,7 +2619,14 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, $"An unexpected error occurred during extraction: {ex.Message}", "Extraction Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                // Handle the exception by logging it and notifying the user.
+                string context = $"Single file extraction of '{(selectedNode != null ? selectedNode.FullPath : "Unknown")}' to '{(string.IsNullOrEmpty(finalDir) ? "N/A" : finalDir)}'";
+                string logFilePath = await LogOperationErrorAsync("Single File Extraction", new[] { (context, ex) });
+
+                string userMessage = "An unexpected error occurred during extraction.\n\n" +
+                                     $"Technical details have been saved to the log file:\n{Path.GetFileName(logFilePath)}";
+
+                MessageBox.Show(this, userMessage, "Extraction Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 RestoreUiAfterError();
             }
         }
@@ -2626,7 +2640,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         {
             try
             {
-                // 1. Validate selection and environment
+                // 1. Validate the selection and environment.
                 if (!(_currentSelection is AudioDataNode audioNode))
                 {
                     MessageBox.Show("Please select a single audio file to replace.", "Invalid Selection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -2641,7 +2655,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
                 var audioInfo = audioNode.CachedAudio;
 
-                // 2. Prompt user for the replacement audio file
+                // 2. Prompt the user for the replacement audio file.
                 OpenFileDialog ofd = new OpenFileDialog
                 {
                     Filter = "Audio Files|*.wav;*.ogg;*.mp3;*.flac|All Files|*.*",
@@ -2651,7 +2665,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
                 string replacementAudioPath = ofd.FileName;
 
-                // 3. Validate the replacement audio file and get its duration for pre-check
+                // 3. Validate the replacement audio file and get its duration for a pre-check.
                 uint newDurationMs = 0;
                 Sound newSound = new Sound();
                 try
@@ -2683,7 +2697,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     return;
                 }
 
-                // 4. Warn user if replacement audio is longer than original, and offer a choice
+                // 4. Warn the user if the replacement audio is longer than the original, and offer a choice.
                 if (newDurationMs > audioInfo.LengthMs)
                 {
                     var warningBuilder = new StringBuilder();
@@ -2699,11 +2713,11 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     if (MessageBox.Show(this, warningBuilder.ToString(), "Length Exceeded Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                     {
                         lblStatus.Text = "Rebuild cancelled by user due to length mismatch.";
-                        return; // Stop the process if user chooses No
+                        return; // Stop the process if user chooses No.
                     }
                 }
 
-                // 5. Show the options dialog to the user to get encoding settings
+                // 5. Show the options dialog to the user to get encoding settings.
                 RebuildOptions rebuildOptions;
                 using (var optionsForm = new RebuildOptionsForm(audioInfo, replacementAudioPath))
                 {
@@ -2714,7 +2728,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     rebuildOptions = optionsForm.Options;
                 }
 
-                // 6. Build a dynamic confirmation message for the user to review
+                // 6. Build a dynamic confirmation message for the user to review.
                 var messageBuilder = new StringBuilder();
                 messageBuilder.AppendLine("Please review the information before rebuilding:");
                 messageBuilder.AppendLine();
@@ -2737,14 +2751,14 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 messageBuilder.AppendLine();
                 messageBuilder.AppendLine("Do you want to proceed with the rebuild?");
 
-                // 7. Show the final confirmation dialog
+                // 7. Show the final confirmation dialog.
                 if (MessageBox.Show(this, messageBuilder.ToString(), "Confirm Rebuild", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes)
                 {
                     lblStatus.Text = "Rebuild cancelled by user.";
                     return;
                 }
 
-                // 8. Prompt for the final save location
+                // 8. Prompt for the final save location.
                 SaveFileDialog sfd = new SaveFileDialog
                 {
                     Filter = "FMOD Files|*.bank;*.fsb",
@@ -2759,7 +2773,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
                 string finalSavePath = sfd.FileName;
 
-                // 9. Prepare UI and start the long-running rebuild process
+                // 9. Prepare the UI and start the long-running rebuild process.
                 SetUiState(false);
                 _isWorking = true;
                 _isScanning = false;
@@ -2772,10 +2786,38 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 bool success = false;
                 string workspacePath = null;
 
+                // Standardized log file naming.
+                string logFileName = $"RebuildLog_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log";
+                // [FIX 02] Save the log in the directory of the final output file, not the exe directory.
+                string outputDirectory = Path.GetDirectoryName(finalSavePath);
+                string logFilePath = Path.Combine(outputDirectory, logFileName);
+
+                // [FIX 01] Initialize the logger ONLY if the Verbose Log checkbox is checked.
+                if (chkVerboseLog.Checked)
+                {
+                    _logger = new LogWriter(logFilePath);
+
+                    _logger.WriteRaw("================================================================");
+                    _logger.WriteRaw($"[SESSION] Rebuild Log Started at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                    _logger.WriteRaw("================================================================");
+                    _logger.WriteRaw($"[TOOL]    App Version:     {AppVersion} ({AppLastUpdate})");
+                    _logger.WriteRaw($"[ENGINE]  FMOD API:        {FmodFullVersion}");
+                    _logger.WriteRaw($"[SOURCE]  Original File:   {audioInfo.SourcePath}");
+                    _logger.WriteRaw($"[SOURCE]  Target Sound:    {audioInfo.Name} (Index: {audioInfo.Index})");
+                    _logger.WriteRaw($"[REPLACE] New Audio File:  {replacementAudioPath}");
+                    _logger.WriteRaw($"[OUTPUT]  Destination:     {finalSavePath}");
+                    _logger.WriteRaw($"[OPTIONS] Encoding:        {rebuildOptions.EncodingFormat}");
+                    _logger.WriteRaw($"[OPTIONS] Quality Target:  {rebuildOptions.Quality}% (for VORBIS)");
+                    _logger.WriteRaw("================================================================");
+                    _logger.WriteRaw("");
+                }
+
                 try
                 {
                     var (rebuildSuccess, path) = await PerformRebuildAndRepackAsync(audioNode, replacementAudioPath, finalSavePath, rebuildOptions, (status) =>
                     {
+                        // Log status updates as they happen (safe to call even if _logger is null).
+                        _logger?.WriteRaw($"[STATUS] {status}");
                         if (InvokeRequired)
                         {
                             BeginInvoke(new Action(() => { lblStatus.Text = status; }));
@@ -2791,7 +2833,15 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"A critical error occurred during the rebuild process:\n\n{ex.Message}", "Rebuild Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    // Log critical rebuild errors to the central error log.
+                    string errorLogPath = await LogOperationErrorAsync("Rebuild Process", new[] { (replacementAudioPath, ex) });
+
+                    // Also write a brief note in the specific rebuild log if enabled.
+                    _logger?.WriteRaw("----------------------------------------------------------------");
+                    _logger?.WriteRaw($"[CRITICAL ERROR] An unhandled exception occurred. See the main error log for details: {errorLogPath}");
+                    _logger?.WriteRaw($"[MESSAGE] {ex.Message}");
+                    _logger?.WriteRaw("----------------------------------------------------------------");
+                    MessageBox.Show($"A critical error occurred during the rebuild process:\n\n{ex.Message}\n\nSee '{Path.GetFileName(errorLogPath)}' for details.", "Rebuild Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     success = false;
                 }
                 finally
@@ -2814,13 +2864,49 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
                     if (success)
                     {
+                        _logger?.WriteRaw("");
+                        _logger?.WriteRaw("[RESULT] Rebuild operation finished successfully.");
                         MessageBox.Show($"Successfully rebuilt and saved to:\n{finalSavePath}", "Rebuild Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    else
+                    {
+                        _logger?.WriteRaw("");
+                        _logger?.WriteRaw("[RESULT] Rebuild operation failed. See main error log for details if an exception occurred.");
+
+                        // Construct failure message dynamically based on whether log was saved.
+                        string failureMsg = "The rebuild process failed.";
+                        if (chkVerboseLog.Checked)
+                        {
+                            failureMsg += $"\n\nA process log is available at:\n{logFilePath}";
+                        }
+                        else
+                        {
+                            failureMsg += "\n\n(Verbose Log was disabled. Enable it to see detailed steps next time.)";
+                        }
+                        failureMsg += "\n\nIf a critical error occurred, check the main ErrorLog file as well.";
+
+                        MessageBox.Show(failureMsg, "Rebuild Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+
+                    if (_logger != null)
+                    {
+                        _logger.WriteRaw($"[SESSION] Log ended at {DateTime.Now:yyyy-MM-dd HH:mm:ss}.");
+                        _logger.Dispose();
+                        _logger = null;
                     }
                 }
             }
             catch (Exception ex)
             {
+                // Catch any other unexpected errors and log them centrally.
+                await LogOperationErrorAsync("Rebuild Process (Outer)", new[] { ("N/A", ex) });
                 MessageBox.Show(this, $"An unexpected error occurred during the rebuild process: {ex.Message}", "Rebuild Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                // Ensure logger is disposed even on outer-level errors.
+                if (_logger != null)
+                {
+                    _logger.Dispose();
+                    _logger = null;
+                }
                 RestoreUiAfterError();
             }
         }
@@ -3568,10 +3654,12 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
         /// <summary>
         /// Writes a detailed log file for exceptions that occurred during an operation.
+        /// This is the centralized method for all error logging.
         /// </summary>
-        /// <param name="failedItems">A collection of tuples containing the path of the failed item and the exception.</param>
+        /// <param name="operationName">The name of the operation where the errors occurred (e.g., "File Loading", "Extraction").</param>
+        /// <param name="failedItems">A collection of tuples containing the context (e.g., file path) and the exception.</param>
         /// <returns>The full path to the generated log file.</returns>
-        private async Task<string> WriteErrorLogAsync(IEnumerable<(string FilePath, Exception ex)> failedItems)
+        private async Task<string> LogOperationErrorAsync(string operationName, IEnumerable<(string Context, Exception ex)> failedItems)
         {
             string logFileName = $"ErrorLog_{DateTime.Now:yyyy-MM-dd_HH-mm-ss-fff}.log";
             string logFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, logFileName);
@@ -3579,21 +3667,21 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
             try
             {
-                sb.AppendLine("===== FSB/BANK Extractor Error Log =====");
+                sb.AppendLine($"===== FSB/BANK Extractor - {operationName} Error Log =====");
                 sb.AppendLine($"Timestamp: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                 sb.AppendLine($"Program Version: {AppVersion}");
                 sb.AppendLine($"Operating System: {Environment.OSVersion}");
-                sb.AppendLine($"FMOD Engine Version: {FmodApiVersion}");
+                sb.AppendLine($"FMOD Engine Version: {FmodFullVersion}");
                 sb.AppendLine("----------------------------------------");
                 sb.AppendLine();
                 sb.AppendLine($"Total Errors: {failedItems.Count()}");
                 sb.AppendLine();
 
                 int errorCount = 1;
-                foreach (var (filePath, ex) in failedItems)
+                foreach (var (context, ex) in failedItems)
                 {
                     sb.AppendLine($"--- Error #{errorCount++} ---");
-                    sb.AppendLine($"Source: {filePath}");
+                    sb.AppendLine($"Context/Source: {context}");
                     sb.AppendLine($"Exception Type: {ex.GetType().Name}");
                     sb.AppendLine($"Message: {ex.Message}");
                     sb.AppendLine("Stack Trace:");
@@ -4141,7 +4229,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 {
                     _writer = new StreamWriter(path, false, Encoding.UTF8) { AutoFlush = true };
                 }
-                catch { /* Logging initialization failed. */ }
+                catch { } // Logging initialization failed.
             }
 
             /// <summary>
