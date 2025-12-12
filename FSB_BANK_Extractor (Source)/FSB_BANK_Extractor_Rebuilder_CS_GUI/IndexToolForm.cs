@@ -10,7 +10,7 @@
  *
  * Technical Environment:
  *  - Target Framework: .NET Framework 4.8
- *  - Last Update: 2025-12-10
+ *  - Last Update: 2025-12-12
  */
 
 using System;
@@ -20,6 +20,10 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 {
     public partial class IndexToolForm : Form
     {
+        // Define constants for UI messages to improve maintainability.
+        private const string MSG_EMPTY_INPUT_CAPTION = "Empty Input";
+        private const string MSG_EMPTY_INPUT_TEXT = "Please enter a value.";
+
         // Public properties to pass data back to the main form.
         public string InputString { get; private set; }
         public bool IsJumpMode { get; private set; }
@@ -52,23 +56,17 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         {
             string text = txtInput.Text;
 
-            // Disable the 'Jump to Index' option if the input suggests a range (contains ',' or '-').
+            // Check if the input suggests a multi-selection or range format.
             bool isMultiRange = text.Contains(",") || text.Contains("-");
 
+            // Directly set the enabled state based on whether it's a multi-range input.
+            // 'Jump to Index' is only available for single index inputs.
+            rdoJump.Enabled = !isMultiRange;
+
+            // If the jump option becomes disabled, automatically switch to the select option.
             if (isMultiRange)
             {
-                if (rdoJump.Enabled)
-                {
-                    rdoJump.Enabled = false;
-                    rdoSelect.Checked = true;
-                }
-            }
-            else
-            {
-                if (!rdoJump.Enabled)
-                {
-                    rdoJump.Enabled = true;
-                }
+                rdoSelect.Checked = true;
             }
         }
 
@@ -82,7 +80,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             // Validate that the input text box is not empty.
             if (string.IsNullOrWhiteSpace(txtInput.Text))
             {
-                MessageBox.Show("Please enter a value.", "Empty Input", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(MSG_EMPTY_INPUT_TEXT, MSG_EMPTY_INPUT_CAPTION, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 

@@ -9,7 +9,7 @@
  *
  * Technical Environment:
  *  - Target Framework: .NET Framework 4.8
- *  - Last Update: 2025-12-10
+ *  - Last Update: 2025-12-12
  */
 
 using System.Windows.Forms;
@@ -41,7 +41,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 "● 1. 파일 불러오기 및 초기화\n" +
                 "  - 파일/폴더 열기: 'File' 메뉴를 이용하거나, 탐색기에서 파일/폴더를 프로그램 창으로 드래그 앤 드롭하여 불러옵니다.\n" +
                 "  - 재귀적 탐색: 폴더를 불러올 경우, 모든 하위 폴더를 포함하여 .bank와 .fsb 파일을 검색합니다.\n" +
-                "  - 병렬 처리 분석: 다중 스레딩(최대 4개)을 활용하여 대규모 파일 목록을 신속하게 분석합니다.\n" +
+                "  - 다단계 진행률 표시: 로딩 시, [SCANNING] -> [PRE-PROCESSING] -> [ANALYZING] -> [FINALIZING] 순서로 하단 상태 바에 현재 작업 단계가 명확하게 표시됩니다.\n" +
                 "  - Strings Bank 자동 로드: 로딩 시, 같은 폴더 내의 *.strings.bank 파일을 자동으로 먼저 로드하여 이벤트, 버스 등의 실제 이름을 복원합니다.\n" +
                 "    (이름이 GUID로 표시될 경우, 'File' -> 'Load Strings Bank (Manual)...' 메뉴로 수동 지정이 가능합니다.)\n" +
                 "  - 오류 로그: 파일 분석 중 오류 발생 시, 프로그램 폴더에 상세 내용이 담긴 'ErrorLog_*.log' 파일을 생성합니다.\n\n" +
@@ -62,6 +62,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
                 "● 4. 추출 시스템\n" +
                 "  - 추출 포맷: FMOD의 내부 포맷(Vorbis, FADPCM 등)에 관계없이, 모든 오디오는 표준 WAV(RIFF) 헤더가 포함된 무손실 파일로 변환되어 저장됩니다.\n" +
+                "  - 상세 진행률 표시: 대용량 파일 추출 시, '[EXTRACTING] [1/5] large_music.wav | 5.2 MB / 10.0 MB (52%)'와 같이 개별 파일의 처리 진행률(MB)을 실시간으로 표시하여 멈춤 현상처럼 보이는 것을 방지합니다.\n" +
                 "  - 추출 모드:\n" +
                 "    1. 'Extract Checked' (Ctrl+E): 현재 뷰(트리 또는 검색 결과)에서 체크된 항목들만 추출합니다.\n" +
                 "    2. 'Extract All' (Ctrl+Shift+E): 현재 로드된 모든 파일의 모든 오디오를 추출합니다.\n" +
@@ -77,8 +78,10 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
                 "● 5. 리빌드 및 리패킹\n" +
                 "  * 필수 조건: 프로그램 실행 폴더에 FMOD 공식 빌드 툴인 'fsbankcl.exe' 파일이 반드시 존재해야 합니다.\n" +
-                "  - 개요: 원본 .bank/.fsb 파일의 구조와 오프셋을 그대로 유지한 채, 특정 사운드 데이터 청크만 교체하는 고급 기능입니다.\n" +
-                "  - 자동화 프로세스: 임시 작업 공간 생성 -> 대상 FSB의 모든 서브 사운드 분해 및 메타데이터(manifest.json) 저장 -> 교체할 사운드 덮어쓰기 -> 재압축 -> 원본 파일에 재조립(패치).\n" +
+                "  - 리빌드 매니저: 'Rebuild Manager...' 메뉴 선택 시, 교체할 파일 목록을 관리하는 전용 창이 열립니다.\n" +
+                "    * 일괄/단일 관리: 여러 파일을 한 번에 교체하거나, 목록에서 특정 파일만 선택하여 교체할 수 있습니다.\n" +
+                "    * 자동 매칭: 'Auto-Match' 기능으로 특정 폴더 내에서 원본과 이름이 같은 오디오 파일(wav, ogg 등)을 자동으로 찾아 목록에 채웁니다.\n" +
+                "  - 다단계 진행률 표시: 리빌드 시, [1/4 PREPARING] -> [2/4 BUILDING] -> [3/4 PATCHING] -> [4/4 CLEANUP] 순서로 하단 상태 바에 복잡한 내부 프로세스 단계가 명확하게 표시됩니다.\n" +
                 "  - 오디오 재생 길이(Duration) 검증: 리빌드 시작 전, 교체할 오디오의 재생 시간이 원본보다 길 경우 경고창을 표시합니다. FMOD 이벤트는 원본 길이를 기준으로 타임라인이 설계된 경우가 많으므로, 더 긴 오디오로 교체하면 이벤트가 중간에 끊기거나 루프가 깨지는 등 예기치 않은 동작을 유발할 수 있습니다. 이것은 파일 손상과는 별개로, 게임 내 사운드 동작에 관한 경고이며 사용자가 위험을 인지하고 동의할 경우에만 계속 진행할 수 있습니다.\n" +
                 "  - 데이터 크기(Size) 최적화 알고리즘:\n" +
                 "    파일 구조 손상을 방지하기 위해, 교체되는 FSB 데이터는 반드시 원본 청크의 파일 크기와 정확히 일치해야 합니다. 이를 위해 아래와 같은 로직이 자동으로 작동합니다:\n" +
@@ -98,9 +101,10 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
                 "● 7. 오디오 분석기\n" +
                 "  - 실행: 'Tools' 메뉴 -> 'Audio Analyzer...'를 선택하여 실시간 분석 창을 엽니다. 오디오 재생 시 데이터가 자동으로 연동됩니다.\n" +
+                "  - 다중 뷰 및 분할 화면: 오실로스코프, 스펙트럼, 스펙트로그램 3개의 분석 도구를 2개의 패널에 자유롭게 배치하고, 슬라이더로 패널 크기를 조절할 수 있습니다.\n" +
                 "  - 시각화:\n" +
-                "    * 정적 파형: 전체 오디오 파일의 파형을 정규화하여 미리 렌더링하고, 현재 재생 위치를 나타내는 헤드를 실시간으로 추적합니다.\n" +
-                "    * FFT 스펙트럼: 오디오의 샘플레이트를 감지하여 나이퀴스트 주파수(샘플레이트/2)까지의 대역폭을 자동으로 설정하여 주파수 분포를 시각화합니다.\n" +
+                "    * 정적 파형 & 벡터스코프: 전체 오디오 파형과 스테레오 위상(Vectorscope)을 상단에 고정 표시하며, 재생 위치를 실시간으로 추적합니다.\n" +
+                "    * FFT 스펙트럼 & 스펙트로그램: 오디오의 샘플레이트를 감지하여 나이퀴스트 주파수(샘플레이트/2)까지의 대역폭을 자동으로 설정하여 주파수 분포를 시각화합니다.\n" +
                 "  - 채널 통계:\n" +
                 "    * 레벨 미터: 각 채널별 실시간 평균 음량(RMS) 및 최대 피크(Peak) 레벨을 제공하며, 0dBFS를 초과하는 디지털 클리핑 발생 시 붉은색 표시와 함께 횟수를 카운트합니다.\n" +
                 "    * 상세 통계: 샘플 피크, 최대/최소 RMS, DC 오프셋 등의 수치를 소수점 단위로 정밀하게 추적하여 표시합니다.\n" +
@@ -135,77 +139,79 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             string helpTextEN =
                 "===== FSB/BANK Extractor & Rebuilder (GUI) User Manual (EN) =====\n\n" +
                 "This application utilizes the FMOD Engine (v2.03.11) to analyze, play, and extract .bank/.fsb files.\n" +
-                "It integrates with 'fsbankcl' to provide a robust audio rebuilding/replacement feature.\n\n\n" +
+                "It integrates with 'fsbankcl.exe' to provide a robust audio rebuilding/replacement feature.\n\n\n" +
 
                 "● 1. File Loading & Initialization\n" +
-                "  - Open File: Use 'File' menu or Drag & Drop files from Explorer onto the application.\n" +
-                "  - Open Folder: Recursively scans a directory for all .bank and .fsb files.\n" +
-                "  - Performance: Uses multi-threaded scanning (max 4 threads) for fast loading.\n" +
-                "  - Strings Bank: Automatically detects *.strings.bank files to resolve filenames.\n" +
-                "    (If detection fails, use 'File' -> 'Load Strings Bank (Manual)...')\n\n" +
+                "  - Open File/Folder: Use the 'File' menu or Drag & Drop files/folders from Explorer.\n" +
+                "  - Recursive Scan: When a folder is loaded, all subdirectories are scanned for .bank/.fsb files.\n" +
+                "  - Multi-Stage Progress: During loading, the status bar clearly indicates the current stage: [SCANNING] -> [PRE-PROCESSING] -> [ANALYZING] -> [FINALIZING].\n" +
+                "  - Auto-Load Strings Bank: Automatically detects and loads *.strings.bank files to resolve asset names (Events, Buses, etc.).\n" +
+                "    (If names appear as GUIDs, use 'File' -> 'Load Strings Bank (Manual)...')\n\n" +
 
                 "● 2. Structure Explorer & Smart Search\n" +
-                "  - Tree View: Visualizes the hierarchy (Bank -> FSB -> Audio/Events) with icons.\n" +
-                "  - Details Panel: Displays Format, Channels, Bit-depth, Loop Points, Data Size, and GUIDs.\n" +
-                "  - Smart Search (Ctrl+F): Filters items into a list view after a short typing delay.\n" +
-                "    * Actions: You can Play, Extract, and Rebuild directly from search results.\n" +
-                "    * Locate: Right-click -> 'Open File Location' jumps to the node in the main tree.\n" +
-                "    * Copy Data: Right-click to copy Name, Path, or GUID to clipboard.\n\n" +
+                "  - Tree View: Visualizes the hierarchy (Bank -> FSB -> Audio/Events) and identifies hidden FSB5 data chunks within .bank files.\n" +
+                "  - Details Panel: Displays detailed metadata like Format, Channels, Bit-depth, Loop Points, Data Offset/Size, and GUIDs.\n" +
+                "  - Smart Search (Ctrl+F): Filters items into a list view after a 500ms debounce delay to prevent lag while typing.\n" +
+                "    * In-Result Actions: Right-click menu in search results allows for direct playback, extraction, rebuilding, and data copying.\n" +
+                "    * Locate Original: Right-click -> 'Open File Location' jumps to the node's original position in the main tree view.\n" +
+                "    * Copy Data: Right-click to copy Name, Full Path, or GUID (for Events/Banks) to the clipboard.\n\n" +
 
                 "● 3. Audio Playback System\n" +
-                "  - Engine: Supports both Raw FSB streams (Core) and FMOD Studio Events.\n" +
-                "  - Controls: Play/Pause, Stop, Seek Bar, and Volume Slider.\n" +
-                "  - Loop: When checked, playback adheres to the loop start/end points defined in the file.\n" +
-                "  - Auto-Play: When checked, selecting an item in the list starts playback immediately.\n\n" +
+                "  - Hybrid Engine: Uses FMOD Core API for raw audio data (.fsb) and FMOD Studio API for complex events to ensure accurate playback.\n" +
+                "  - Controls: Play/Pause, Stop, Seek Bar, and Volume Slider (0-100%).\n" +
+                "  - Loop: When checked, playback adheres to the precise loop start/end points (in ms) defined in the file header.\n" +
+                "  - Auto-Play: When checked, selecting an item in any view starts playback immediately.\n\n" +
 
                 "● 4. Extraction System\n" +
-                "  - Format: All audio is converted to standard WAV files with proper RIFF headers.\n" +
+                "  - Format: All audio is converted to standard WAV files with proper RIFF headers, regardless of the internal FMOD format (Vorbis, FADPCM, etc.).\n" +
+                "  - Detailed Progress: For large files, the status bar shows per-file progress (e.g., '[EXTRACTING] [1/5] large_music.wav | 5.2 MB / 10.0 MB (52%)') to prevent the UI from appearing frozen.\n" +
                 "  - Modes:\n" +
-                "    1. Extract Checked (Ctrl+E): Exports only checked items.\n" +
-                "    2. Extract All (Ctrl+Shift+E): Exports all loaded audio assets.\n" +
-                "    3. Single Extract: Right-click item -> 'Extract This Item...'.\n" +
-                "  - Path Options (Combo Box): Sets the base directory for extraction.\n" +
-                "    1. Same as source file: Uses the directory where the source file is located.\n" +
-                "    2. Custom path: Uses a user-defined fixed directory.\n" +
-                "    3. Ask every time: Prompts for the base location on each operation.\n" +
-                "  - Automatic Folder Generation:\n" +
-                "    Regardless of the path option, subfolders are created automatically:\n" +
-                "    * Single FSB detected: Creates a folder named '[FileName]'.\n" +
-                "    * Multiple FSBs detected: Creates folders named '[FileName]_[InternalFSBName]'.\n" +
-                "  - Verbose Log: Generates a detailed log file with timestamp, success status, and format info.\n\n" +
+                "    1. 'Extract Checked' (Ctrl+E): Exports only checked items from the current view (tree or search results).\n" +
+                "    2. 'Extract All' (Ctrl+Shift+E): Exports all audio assets from all loaded files.\n" +
+                "    3. Single Extract: Right-click an audio item -> 'Extract This Item...'.\n" +
+                "  - Path Options: Sets the base directory for extraction operations.\n" +
+                "    1. Same as source file: Uses the directory where the source .bank/.fsb file is located.\n" +
+                "    2. Custom path: Uses a user-defined fixed directory for all extractions.\n" +
+                "    3. Ask every time: Prompts for a base location on each extraction operation.\n" +
+                "  - Smart Folder Generation: Subfolders are created automatically under the base path for better organization:\n" +
+                "    * For single FSBs: Creates a folder named '[BankFileName]'.\n" +
+                "    * For multiple FSBs within a Bank: Creates nested folders named '[BankFileName]/[InternalFSBName]'.\n" +
+                "  - Verbose Log: Generates a detailed TSV (Tab-Separated Values) log file with success status, format info, and timings for each extracted file.\n\n" +
 
-                "● 5. Rebuilding & Repacking [Advanced]\n" +
-                "  * Requirement: 'fsbankcl.exe' must be in the app directory.\n" +
-                "  - Concept: Replaces specific audio data while preserving the original Bank structure.\n" +
-                "  - Process: Create Workspace -> Extract Subsounds -> Replace -> Repack -> Patch Original.\n" +
-                "  - Audio Duration Validation: Before rebuilding, the tool checks if the replacement audio's playback time (duration) is longer than the original. Since FMOD events are often timed to the original audio's duration, using a longer file can cause unexpected in-game behavior like sounds cutting off prematurely or broken loops. This is a warning about gameplay behavior, separate from file corruption, and the process will only continue if the user acknowledges the risk.\n" +
+                "● 5. Rebuilding & Repacking\n" +
+                "  * Requirement: The official FMOD tool 'fsbankcl.exe' must be in the application's directory.\n" +
+                "  - Rebuild Manager: The 'Rebuild Manager...' menu opens a dedicated dialog for managing file replacements.\n" +
+                "    * Batch/Single Mode: Replace one or many files in a single operation.\n" +
+                "    * Auto-Match: Automatically find replacement audio files in a folder that match the original internal names.\n" +
+                "  - Multi-Stage Progress: The status bar clearly shows the complex internal stages of the rebuild: [1/4 PREPARING] -> [2/4 BUILDING] -> [3/4 PATCHING] -> [4/4 CLEANUP].\n" +
+                "  - Audio Duration Validation: Before rebuilding, the tool checks if the replacement audio's duration is longer than the original. Since FMOD events are often timed to the original audio's duration, using a longer file can cause unexpected in-game behavior like sounds cutting off or broken loops. This is a warning about gameplay behavior, separate from file corruption, and the process only continues if the user acknowledges the risk.\n" +
                 "  - Data Size Optimization Logic:\n" +
-                "    To avoid corrupting the .bank file's structure, the new data chunk must exactly match the original chunk's file size (in bytes). The tool enforces this automatically:\n" +
+                "    To avoid corrupting the file structure, the new data chunk must exactly match the original chunk's file size (in bytes). The tool enforces this automatically:\n" +
                 "    1. Variable Quality Formats (Vorbis):\n" +
-                "       - Uses a 'Binary Search' algorithm to automatically find the highest Quality (0-100)\n" +
-                "         that fits within the original size limit.\n" +
+                "       - Uses a 'Binary Search' algorithm to automatically find the highest Quality (0-100) that fits within the original size limit. This may involve several test builds.\n" +
+                "       - If the final result is slightly smaller, the remaining space is filled with zeros (Padding) to match the size exactly.\n" +
                 "    2. Fixed Formats (PCM, FADPCM):\n" +
-                "       - If Smaller: The remaining space is filled with zeros (Padding) to match offsets.\n" +
-                "       - If Larger: A Warning is displayed. You can proceed at your own risk.\n" +
-                "         (Warning: Oversized data is unsafe for .bank files, but okay for standalone .fsb files.)\n\n" +
+                "       - If Smaller: The remaining space is padded with zeros to match offsets.\n" +
+                "       - If Larger: A strong warning is displayed as this will likely corrupt a .bank file by shifting subsequent data offsets. The user must agree to proceed.\n" +
+                "         (Tip: Oversized data is only safe when saving as a standalone .fsb file.)\n\n" +
 
                 "● 6. Data Management Tools\n" +
-                "  - Index Tools (Right-click Folder): Useful for FSBs with many subsounds.\n" +
-                "    * Jump: Scroll to a specific index number immediately.\n" +
-                "    * Select Range: Batch check items using syntax like '1-10, 15, 20-30'.\n" +
-                "  - CSV Export (Ctrl+Shift+C): Exports all tree metadata (Path, Index, Format, Loop, GUID, etc.)\n" +
-                "    to an Excel-compatible CSV file.\n\n" +
+                "  - Index Tools (Right-click FSB container node): For easily navigating FSBs with hundreds of subsounds.\n" +
+                "    * 'Jump to Index' Mode: Immediately scroll to and select a specific index number.\n" +
+                "    * 'Select by Range' Mode: Batch-check items using complex syntax like '1-10, 15, 20-30'.\n" +
+                "  - CSV Export (Ctrl+Shift+C): Exports all tree metadata (Path, Index, Format, Loop, GUID, etc.) to an Excel-compatible CSV file.\n\n" +
 
                 "● 7. Audio Analyzer\n" +
-                "  - Launch: Go to 'Tools' -> 'Audio Analyzer...' to open the real-time analysis window.\n" +
+                "  - Launch: Go to 'Tools' -> 'Audio Analyzer...' to open the real-time analysis window, which automatically links to any playing audio.\n" +
+                "  - Multi-View & Split Screen: Freely arrange Oscilloscope, Spectrum, and Spectrogram tools in two panels and adjust the panel size with a slider.\n" +
                 "  - Visualization:\n" +
-                "    * Static Waveform: Pre-renders the normalized waveform and tracks the playhead position in real-time.\n" +
-                "    * FFT Spectrum: Dynamically scales the frequency range up to the Nyquist frequency (SampleRate / 2) based on the source audio.\n" +
+                "    * Static Waveform & Vectorscope: A static overview of the entire waveform and stereo phase is fixed at the top, tracking the playhead in real-time.\n" +
+                "    * FFT Spectrum & Spectrogram: Dynamically scales the frequency range up to the Nyquist frequency (SampleRate / 2) based on the source audio.\n" +
                 "  - Channel Statistics:\n" +
-                "    * Meters: Monitors per-channel Peak/RMS levels and detects 0dBFS digital clipping with red indicators.\n" +
+                "    * Meters: Monitors per-channel real-time Peak/RMS levels and detects 0dBFS digital clipping with red indicators and a clip counter.\n" +
                 "    * Detail Stats: Tracks precise values for Sample Peak, Max/Min RMS, and DC Offset.\n" +
                 "  - Loudness & Standards:\n" +
-                "    * Standards: Select broadcasting standards (EBU R 128, ATSC A/85, ARIB, OP-59) to verify compliance against targets.\n" +
+                "    * Standards: Select broadcasting standards (EBU R 128, ATSC A/85, etc.) to verify compliance against targets.\n" +
                 "    * Measurements: Monitors Integrated Loudness (Cumulative), Short-term, Momentary LUFS, and True Peak (dBTP).\n" +
                 "    * Reset Functionality: Use the 'Reset' button to clear cumulative Integrated Loudness stats for a fresh measurement.\n" +
                 "      (Note: Adjusting the volume slider in the main form automatically triggers a reset to ensure accuracy.)\n\n" +
@@ -220,8 +226,9 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 "  - F1 : Open Help\n\n" +
 
                 "● 9. Troubleshooting\n" +
-                "  - Rebuild Failed: 'fsbankcl.exe' is missing, or the file is too large to fit even at lowest quality.\n" +
-                "  - No Sound: Codec might be unsupported or file is encrypted (Check FMOD error logs).\n\n" +
+                "  - Rebuild Failed: 'fsbankcl.exe' is missing, or the replacement audio file is too large to fit even at the lowest compression quality (0).\n" +
+                "  - No Sound: The codec might be unsupported by FMOD, or the file could be encrypted.\n" +
+                "  - FMOD Init Failed: May be caused by an incompatible or corrupted FMOD library (fmod.dll, etc.) in the system path.\n\n" +
 
                 "● 10. License Information\n" +
                 "  - FMOD Engine: This program uses FMOD Engine (Core/Studio API) version 2.03.11.\n" +

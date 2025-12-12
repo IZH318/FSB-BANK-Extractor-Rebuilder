@@ -1,25 +1,25 @@
 ﻿/**
-* @file AudioAnalyzerForm.cs
-* @brief Provides a real-time audio visualization and analysis interface using FMOD.
-* @author (Github) IZH318 (https://github.com/IZH318)
-*
-* @details
-* This form renders a static waveform, frequency spectrum, spectrogram, vector scope, oscilloscope,
-* and detailed loudness statistics (LUFS, True Peak) for the currently playing audio stream.
-* It strictly follows loudness standards like EBU R 128 and ATSC A/85.
-*
-* Key Features:
-*  - Dynamically configurable analysis panel with Split view mode.
-*  - Real-time FFT spectrum analysis, spectrogram, oscilloscope, and vectorscope.
-*  - Comprehensive loudness metering (Momentary, Short-Term, Integrated, True Peak).
-*  - Compliance checks against various broadcasting standards.
-*  - Detailed per-channel statistics including RMS, Peak, and Clip detection.
-*
-* Technical Environment:
-*  - FMOD Engine Version: v2.03.11
-*  - Target Framework: .NET Framework 4.8
-*  - Last Update: 2025-12-10
-*/
+ * @file AudioAnalyzerForm.cs
+ * @brief Provides a real-time audio visualization and analysis interface using FMOD.
+ * @author (Github) IZH318 (https://github.com/IZH318)
+ *
+ * @details
+ * This form renders a static waveform, frequency spectrum, spectrogram, vector scope, oscilloscope,
+ * and detailed loudness statistics (LUFS, True Peak) for the currently playing audio stream.
+ * It strictly follows loudness standards like EBU R 128 and ATSC A/85.
+ *
+ * Key Features:
+ *  - Dynamically configurable analysis panel with Split view mode.
+ *  - Real-time FFT spectrum analysis, spectrogram, oscilloscope, and vectorscope.
+ *  - Comprehensive loudness metering (Momentary, Short-Term, Integrated, True Peak).
+ *  - Compliance checks against various broadcasting standards.
+ *  - Detailed per-channel statistics including RMS, Peak, and Clip detection.
+ *
+ * Technical Environment:
+ *  - FMOD Engine Version: v2.03.11 (Studio API minor release, build 158528)
+ *  - Target Framework: .NET Framework 4.8
+ *  - Last Update: 2025-12-12
+ */
 
 using System;
 using System.Collections.Generic;
@@ -33,71 +33,103 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 {
     public partial class AudioAnalyzerForm : Form
     {
-        #region 1. Configuration & Constants
+        #region 1. Constants & Configuration
 
-        // Define analysis settings constants.
-        private const int FFT_WINDOW_SIZE = 4096;
-        private const float SILENCE_THRESHOLD_DB = -90.0f;
-        private const float METER_MIN_DB = -60.0f;
-        private const int SPECTRUM_HISTORY_COUNT = 512; // Width of the spectrogram in pixels.
-        private const float SPECTRUM_MIN_DB = -72.0f;
-        private const float SPECTRUM_MAX_DB = 6.0f;
+        /// <summary>
+        /// Contains constants related to audio analysis parameters.
+        /// </summary>
+        private static class AnalysisSettings
+        {
+            public const int FFT_WINDOW_SIZE = 4096;
+            public const float SILENCE_THRESHOLD_DB = -90.0f;
+            public const float METER_MIN_DB = -60.0f;
+            public const int SPECTRUM_HISTORY_COUNT = 512; // Width of the spectrogram in pixels.
+            public const float SPECTRUM_MIN_DB = -72.0f;
+            public const float SPECTRUM_MAX_DB = 6.0f;
+        }
 
+        /// <summary>
+        /// Contains constants related to the visual layout of the form.
+        /// </summary>
+        private static class LayoutConstants
+        {
+            public const float RATIO_WAVEFORM = 0.20f;
+            public const float RATIO_ANALYSIS = 0.35f;
+            public const float RATIO_STATS = 0.45f;
+            public const int PADDING = 8;
+            public const int LOUDNESS_PANEL_WIDTH = 200;
+        }
 
-        // Define visual layout constants.
-        private const float RATIO_WAVEFORM = 0.20f;
-        private const float RATIO_ANALYSIS = 0.35f;
-        private const float RATIO_STATS = 0.45f;
-        private const int PADDING = 8;
-        private const int LOUDNESS_PANEL_WIDTH = 200;
+        /// <summary>
+        /// Defines the color palette and fonts used throughout the application theme.
+        /// </summary>
+        private static class AppTheme
+        {
+            // Define panel and background colors.
+            public static readonly Color BG = Color.FromArgb(20, 20, 20);
+            public static readonly Color PANEL_BG = Color.FromArgb(32, 32, 35);
+            public static readonly Color SETTINGS_PANEL_BG = Color.FromArgb(45, 45, 48);
+            public static readonly Color GRID = Color.FromArgb(60, 60, 60);
+            public static readonly Color GRAPH_BG = Color.Black;
 
-        // Define color palette.
-        private readonly Color COLOR_BG = Color.FromArgb(20, 20, 20);
-        private readonly Color COLOR_PANEL_BG = Color.FromArgb(32, 32, 35);
-        private readonly Color COLOR_SETTINGS_PANEL_BG = Color.FromArgb(45, 45, 48);
-        private readonly Color COLOR_GRID = Color.FromArgb(60, 60, 60);
-        private readonly Color COLOR_GRAPH_BG = Color.Black;
+            // Define text colors.
+            public static readonly Color LABEL = Color.Gray;
+            public static readonly Color AXIS_TEXT = Color.FromArgb(180, 180, 180);
+            public static readonly Color VAL_NORMAL = Color.White;
+            public static readonly Color VAL_WARNING = Color.Yellow;
+            public static readonly Color VAL_DANGER = Color.Red;
+            public static readonly Color VAL_OK = Color.FromArgb(0, 200, 0);
 
-        // Define text colors.
-        private readonly Color COLOR_LABEL = Color.Gray;
-        private readonly Color COLOR_AXIS_TEXT = Color.FromArgb(180, 180, 180);
-        private readonly Color COLOR_VAL_NORMAL = Color.White;
-        private readonly Color COLOR_VAL_WARNING = Color.Yellow;
-        private readonly Color COLOR_VAL_DANGER = Color.Red;
-        private readonly Color COLOR_VAL_OK = Color.FromArgb(0, 200, 0);
+            // Define graph colors.
+            public static readonly Color WAVEFORM_STATIC = Color.FromArgb(100, 149, 237);
+            public static readonly Color PLAYHEAD = Color.Red;
+            public static readonly Color OSCILLOSCOPE = Color.Lime;
+            public static readonly Color VECTORSCOPE = Color.FromArgb(0, 255, 128);
+            public static readonly Color FFT_TOP = Color.FromArgb(0, 255, 128);
+            public static readonly Color FFT_BOTTOM = Color.FromArgb(0, 100, 200);
 
-        // Define graph colors.
-        private readonly Color COLOR_WAVEFORM_STATIC = Color.FromArgb(100, 149, 237);
-        private readonly Color COLOR_PLAYHEAD = Color.Red;
-        private readonly Color COLOR_OSCILLOSCOPE = Color.Lime;
-        private readonly Color COLOR_VECTORSCOPE = Color.FromArgb(0, 255, 128);
-        private readonly Color COLOR_FFT_TOP = Color.FromArgb(0, 255, 128);
-        private readonly Color COLOR_FFT_BOTTOM = Color.FromArgb(0, 100, 200);
+            // Define meter colors.
+            public static readonly Color METER_BG = Color.FromArgb(10, 10, 10);
+            public static readonly Color METER_LOW = Color.FromArgb(0, 180, 0);
+            public static readonly Color METER_MID = Color.FromArgb(200, 200, 0);
+            public static readonly Color METER_HIGH = Color.Red;
 
-        // Define meter colors.
-        private readonly Color COLOR_METER_BG = Color.FromArgb(10, 10, 10);
-        private readonly Color COLOR_METER_LOW = Color.FromArgb(0, 180, 0);
-        private readonly Color COLOR_METER_MID = Color.FromArgb(200, 200, 0);
-        private readonly Color COLOR_METER_HIGH = Color.Red;
+            // Define clip indicator colors.
+            public static readonly Color CLIP_ON = Color.Red;
+            public static readonly Color CLIP_OFF = Color.FromArgb(60, 0, 0);
+        }
 
-        // Define clip indicator colors.
-        private readonly Color COLOR_CLIP_ON = Color.Red;
-        private readonly Color COLOR_CLIP_OFF = Color.FromArgb(60, 0, 0);
+        #endregion
 
-        // Define font objects.
+        #region 2. Enums & Structs
+
+        /// <summary>
+        /// Defines the available analysis tools for the dynamic view panels.
+        /// </summary>
+        private enum AnalysisTool { Oscilloscope, Spectrum, Spectrogram }
+
+        /// <summary>
+        /// Defines the properties of a loudness standard.
+        /// </summary>
+        private struct LoudnessStandard
+        {
+            public string Name { get; set; }
+            public float? TargetIntegratedLoudness { get; set; }
+            public float? MaxTruePeak { get; set; }
+            public override string ToString() => Name;
+        }
+
+        #endregion
+
+        #region 3. Fields & State
+
+        // Declare font objects.
         private Font _fontLabel;
         private Font _fontValue;
         private Font _fontTitle;
         private Font _fontAxis;
 
-        #endregion
-
-        #region 2. Fields: FMOD, State & Dynamic View
-
-        // Enums for dynamic view configuration.
-        private enum AnalysisTool { Oscilloscope, Spectrum, Spectrogram }
-
-        // Dynamic view state variables.
+        // Declare dynamic view state variables.
         private AnalysisTool _panel1Tool = AnalysisTool.Spectrum;
         private AnalysisTool _panel2Tool = AnalysisTool.Spectrogram;
         private float _splitRatio = 0.5f; // 0.0 to 1.0
@@ -144,14 +176,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         private float _statMaxTruePeak = -100.0f;
         private float _statDcOffset = 0.0f;
 
-        // Define the loudness standard structure.
-        private struct LoudnessStandard
-        {
-            public string Name { get; set; }
-            public float? TargetIntegratedLoudness { get; set; }
-            public float? MaxTruePeak { get; set; }
-            public override string ToString() => Name;
-        }
+        // Declare loudness standard variables.
         private List<LoudnessStandard> _loudnessStandards;
         private LoudnessStandard _selectedStandard;
 
@@ -160,7 +185,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
         #endregion
 
-        #region 3. Initialization & Cleanup
+        #region 4. Initialization & Cleanup
 
         /// <summary>
         /// Initializes a new instance of the AudioAnalyzerForm class.
@@ -175,20 +200,20 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             UpdateSplitLabels();
 
             // Override designer properties with constants for consistency.
-            this.BackColor = COLOR_BG;
-            panelSettings.BackColor = COLOR_SETTINGS_PANEL_BG;
-            lblPeakHold.ForeColor = COLOR_AXIS_TEXT;
-            lblSmoothing.ForeColor = COLOR_AXIS_TEXT;
-            lblSplitLeft.ForeColor = COLOR_AXIS_TEXT;
-            lblSplitRight.ForeColor = COLOR_AXIS_TEXT;
-            comboBoxStandards.BackColor = COLOR_PANEL_BG;
-            comboBoxStandards.ForeColor = COLOR_VAL_NORMAL;
-            cmbView1.BackColor = COLOR_PANEL_BG;
-            cmbView1.ForeColor = COLOR_VAL_NORMAL;
-            cmbView2.BackColor = COLOR_PANEL_BG;
-            cmbView2.ForeColor = COLOR_VAL_NORMAL;
-            btnResetLoudness.BackColor = COLOR_GRID;
-            btnResetLoudness.ForeColor = COLOR_VAL_NORMAL;
+            this.BackColor = AppTheme.BG;
+            panelSettings.BackColor = AppTheme.SETTINGS_PANEL_BG;
+            lblPeakHold.ForeColor = AppTheme.AXIS_TEXT;
+            lblSmoothing.ForeColor = AppTheme.AXIS_TEXT;
+            lblSplitLeft.ForeColor = AppTheme.AXIS_TEXT;
+            lblSplitRight.ForeColor = AppTheme.AXIS_TEXT;
+            comboBoxStandards.BackColor = AppTheme.PANEL_BG;
+            comboBoxStandards.ForeColor = AppTheme.VAL_NORMAL;
+            cmbView1.BackColor = AppTheme.PANEL_BG;
+            cmbView1.ForeColor = AppTheme.VAL_NORMAL;
+            cmbView2.BackColor = AppTheme.PANEL_BG;
+            cmbView2.ForeColor = AppTheme.VAL_NORMAL;
+            btnResetLoudness.BackColor = AppTheme.GRID;
+            btnResetLoudness.ForeColor = AppTheme.VAL_NORMAL;
 
             // Enable double buffering on the custom drawing panel to reduce flicker.
             typeof(Panel).InvokeMember("DoubleBuffered",
@@ -255,23 +280,6 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Resets all loudness-related DSPs and tracked statistics to start a new measurement session.
-        /// </summary>
-        private void ResetLoudnessAnalysis()
-        {
-            if (_loudnessDsp.hasHandle())
-            {
-                _loudnessDsp.reset();
-            }
-
-            _statMaxMomentaryLUFS = -100.0f;
-            _statMaxShortTermLUFS = -100.0f;
-            _statMaxTruePeak = -100.0f;
-
-            panelDrawingSurface.Invalidate();
-        }
-
-        /// <summary>
         /// Attaches the analyzer to the currently playing audio stream.
         /// </summary>
         /// <param name="coreSystem">The FMOD Core system.</param>
@@ -303,7 +311,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             _coreSystem.createDSPByType(DSP_TYPE.FFT, out _fftDsp);
             if (_fftDsp.hasHandle())
             {
-                _fftDsp.setParameterInt((int)DSP_FFT.WINDOWSIZE, FFT_WINDOW_SIZE);
+                _fftDsp.setParameterInt((int)DSP_FFT.WINDOWSIZE, AnalysisSettings.FFT_WINDOW_SIZE);
                 _activeChannel.addDSP(CHANNELCONTROL_DSP_INDEX.HEAD, _fftDsp);
                 _fftDsp.setActive(true);
             }
@@ -397,6 +405,27 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
+        /// Resets all loudness-related DSPs and tracked statistics to start a new measurement session.
+        /// </summary>
+        private void ResetLoudnessAnalysis()
+        {
+            if (_loudnessDsp.hasHandle())
+            {
+                _loudnessDsp.reset();
+            }
+
+            _statMaxMomentaryLUFS = -100.0f;
+            _statMaxShortTermLUFS = -100.0f;
+            _statMaxTruePeak = -100.0f;
+
+            panelDrawingSurface.Invalidate();
+        }
+
+        #endregion
+
+        #region 5. UI Events & Layout
+
+        /// <summary>
         /// Handles the FormClosing event of the AudioAnalyzerForm control.
         /// </summary>
         /// <param name="sender">The source of the event.</param>
@@ -410,9 +439,16 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             _fontAxis?.Dispose();
         }
 
-        #endregion
-
-        #region 4. UI Events & Layout
+        /// <summary>
+        /// Handles the Resize event of the AudioAnalyzerForm control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        private void AudioAnalyzerForm_Resize(object sender, EventArgs e)
+        {
+            UpdateControlLayout();
+            panelDrawingSurface.Invalidate();
+        }
 
         /// <summary>
         /// Handles the Scroll event of the trackSmoothing control.
@@ -438,21 +474,15 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Updates the text labels for the setting sliders.
+        /// Handles the Scroll event of the trackViewSplit control.
         /// </summary>
-        private void UpdateSettingsLabels()
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        private void trackViewSplit_Scroll(object sender, EventArgs e)
         {
-            lblSmoothing.Text = $"Smoothing: {Math.Round(_smoothingFactor * 100)}%";
-            lblPeakHold.Text = $"Peak Hold: {_peakHoldTimeMs}ms";
-        }
-
-        /// <summary>
-        /// Updates the percentage labels for the view split slider.
-        /// </summary>
-        private void UpdateSplitLabels()
-        {
-            lblSplitLeft.Text = $"{trackViewSplit.Value}%";
-            lblSplitRight.Text = $"{100 - trackViewSplit.Value}%";
+            _splitRatio = trackViewSplit.Value / 100.0f;
+            UpdateSplitLabels();
+            panelDrawingSurface.Invalidate();
         }
 
         /// <summary>
@@ -469,15 +499,96 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Handles the Scroll event of the view split TrackBar.
+        /// Handles the SelectedIndexChanged event of the comboBoxStandards control.
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
-        private void trackViewSplit_Scroll(object sender, EventArgs e)
+        private void ComboBoxStandards_SelectedIndexChanged(object sender, EventArgs e)
         {
-            _splitRatio = trackViewSplit.Value / 100.0f;
-            UpdateSplitLabels();
-            panelDrawingSurface.Invalidate();
+            _selectedStandard = (LoudnessStandard)comboBoxStandards.SelectedItem;
+            ResetLoudnessAnalysis();
+        }
+
+        /// <summary>
+        /// Handles the Click event of the btnResetLoudness control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        private void btnResetLoudness_Click(object sender, EventArgs e) => ResetLoudnessAnalysis();
+
+        /// <summary>
+        /// Recalculates the positions of all controls dynamically based on form size.
+        /// </summary>
+        private void UpdateControlLayout()
+        {
+            this.SuspendLayout();
+
+            int topOffset = panelSettings.Height;
+            int w = this.ClientSize.Width;
+            int h = this.ClientSize.Height - topOffset;
+
+            int availH = h - (LayoutConstants.PADDING * 4);
+            int hWave = (int)(availH * LayoutConstants.RATIO_WAVEFORM);
+            int hAnalysis = (int)(availH * LayoutConstants.RATIO_ANALYSIS);
+            int hStats = availH - hWave - hAnalysis;
+
+            // These are the drawing areas *inside* the panelDrawingSurface.
+            // Control positioning is relative to the form's ClientSize, not the panel's.
+            Rectangle drawingArea = new Rectangle(0, 0, w, h);
+
+            Rectangle rectAnalysis = new Rectangle(LayoutConstants.PADDING, LayoutConstants.PADDING + hWave + LayoutConstants.PADDING, w - (LayoutConstants.PADDING * 2), hAnalysis);
+            Rectangle rectStats = new Rectangle(LayoutConstants.PADDING, rectAnalysis.Bottom + LayoutConstants.PADDING, w - (LayoutConstants.PADDING * 2), hStats);
+
+            // Position dynamic controls inside the analysis panel.
+            int controlBarHeight = 30;
+            Rectangle rectAnalysisControls = new Rectangle(rectAnalysis.X, panelDrawingSurface.Top + rectAnalysis.Y, rectAnalysis.Width, controlBarHeight);
+
+            cmbView1.Location = new Point(rectAnalysisControls.X + 150, rectAnalysisControls.Y + 5);
+            cmbView2.Location = new Point(rectAnalysisControls.Right - cmbView2.Width - 5, rectAnalysisControls.Y + 5);
+
+            int labelPadding = 8;
+            lblSplitLeft.Location = new Point(cmbView1.Right + labelPadding, rectAnalysisControls.Y + 7);
+
+            int sliderX = lblSplitLeft.Right + labelPadding;
+
+            lblSplitRight.Location = new Point(cmbView2.Left - lblSplitRight.Width - labelPadding, rectAnalysisControls.Y + 7);
+
+            int sliderWidth = lblSplitRight.Left - sliderX - labelPadding;
+
+            trackViewSplit.Location = new Point(sliderX, rectAnalysisControls.Y + 3);
+            trackViewSplit.Width = sliderWidth > 0 ? sliderWidth : 1;
+
+            // Position loudness controls inside the stats panel.
+            int metersPanelWidth = CalculateMetersPanelWidth(_lastChannelCount);
+            Rectangle rRight = new Rectangle(rectStats.Right - LayoutConstants.LOUDNESS_PANEL_WIDTH, panelDrawingSurface.Top + rectStats.Y, LayoutConstants.LOUDNESS_PANEL_WIDTH, rectStats.Height);
+
+            if (rRight.Width > 20 && rRight.Height > 60)
+            {
+                comboBoxStandards.Location = new Point(rRight.X + 10, rRight.Y + 25);
+                comboBoxStandards.Width = rRight.Width - 20;
+                btnResetLoudness.Location = new Point(rRight.X + 10, rRight.Bottom - 30);
+                btnResetLoudness.Width = rRight.Width - 20;
+            }
+
+            this.ResumeLayout(true);
+        }
+
+        /// <summary>
+        /// Updates the text labels for the setting sliders.
+        /// </summary>
+        private void UpdateSettingsLabels()
+        {
+            lblSmoothing.Text = $"Smoothing: {Math.Round(_smoothingFactor * 100)}%";
+            lblPeakHold.Text = $"Peak Hold: {_peakHoldTimeMs}ms";
+        }
+
+        /// <summary>
+        /// Updates the percentage labels for the view split slider.
+        /// </summary>
+        private void UpdateSplitLabels()
+        {
+            lblSplitLeft.Text = $"{trackViewSplit.Value}%";
+            lblSplitRight.Text = $"{100 - trackViewSplit.Value}%";
         }
 
         /// <summary>
@@ -506,95 +617,9 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             cmbView2.SelectedIndexChanged += CmbView_SelectedIndexChanged;
         }
 
-        /// <summary>
-        /// Handles the SelectedIndexChanged event of the comboBoxStandards control.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
-        private void ComboBoxStandards_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            _selectedStandard = (LoudnessStandard)comboBoxStandards.SelectedItem;
-            ResetLoudnessAnalysis();
-        }
-
-        /// <summary>
-        /// Handles the Click event of the btnResetLoudness control.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
-        private void btnResetLoudness_Click(object sender, EventArgs e) => ResetLoudnessAnalysis();
-
-        /// <summary>
-        /// Handles the Resize event of the AudioAnalyzerForm control.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
-        private void AudioAnalyzerForm_Resize(object sender, EventArgs e)
-        {
-            UpdateControlLayout();
-            panelDrawingSurface.Invalidate();
-        }
-
-        /// <summary>
-        /// Recalculates the positions of all controls dynamically based on form size.
-        /// </summary>
-        private void UpdateControlLayout()
-        {
-            this.SuspendLayout();
-
-            int topOffset = panelSettings.Height;
-            int w = this.ClientSize.Width;
-            int h = this.ClientSize.Height - topOffset;
-
-            int availH = h - (PADDING * 4);
-            int hWave = (int)(availH * RATIO_WAVEFORM);
-            int hAnalysis = (int)(availH * RATIO_ANALYSIS);
-            int hStats = availH - hWave - hAnalysis;
-
-            // These are the drawing areas *inside* the panelDrawingSurface.
-            // Control positioning is relative to the form's ClientSize, not the panel's.
-            Rectangle drawingArea = new Rectangle(0, 0, w, h);
-
-            Rectangle rectAnalysis = new Rectangle(PADDING, PADDING + hWave + PADDING, w - (PADDING * 2), hAnalysis);
-            Rectangle rectStats = new Rectangle(PADDING, rectAnalysis.Bottom + PADDING, w - (PADDING * 2), hStats);
-
-            // Position dynamic controls inside the analysis panel.
-            int controlBarHeight = 30;
-            Rectangle rectAnalysisControls = new Rectangle(rectAnalysis.X, panelDrawingSurface.Top + rectAnalysis.Y, rectAnalysis.Width, controlBarHeight);
-
-            cmbView1.Location = new Point(rectAnalysisControls.X + 150, rectAnalysisControls.Y + 5);
-            cmbView2.Location = new Point(rectAnalysisControls.Right - cmbView2.Width - 5, rectAnalysisControls.Y + 5);
-
-            int labelPadding = 8;
-            lblSplitLeft.Location = new Point(cmbView1.Right + labelPadding, rectAnalysisControls.Y + 7);
-
-            int sliderX = lblSplitLeft.Right + labelPadding;
-
-            lblSplitRight.Location = new Point(cmbView2.Left - lblSplitRight.Width - labelPadding, rectAnalysisControls.Y + 7);
-
-            int sliderWidth = lblSplitRight.Left - sliderX - labelPadding;
-
-            trackViewSplit.Location = new Point(sliderX, rectAnalysisControls.Y + 3);
-            trackViewSplit.Width = sliderWidth > 0 ? sliderWidth : 1;
-
-            // Position loudness controls inside the stats panel.
-            int metersPanelWidth = CalculateMetersPanelWidth(_lastChannelCount);
-            Rectangle rRight = new Rectangle(rectStats.Right - LOUDNESS_PANEL_WIDTH, panelDrawingSurface.Top + rectStats.Y, LOUDNESS_PANEL_WIDTH, rectStats.Height);
-
-            if (rRight.Width > 20 && rRight.Height > 60)
-            {
-                comboBoxStandards.Location = new Point(rRight.X + 10, rRight.Y + 25);
-                comboBoxStandards.Width = rRight.Width - 20;
-                btnResetLoudness.Location = new Point(rRight.X + 10, rRight.Bottom - 30);
-                btnResetLoudness.Width = rRight.Width - 20;
-            }
-
-            this.ResumeLayout(true);
-        }
-
         #endregion
 
-        #region 5. Data Processing
+        #region 6. Core Data Processing
 
         /// <summary>
         /// Handles the Tick event of the renderTimer control.
@@ -648,7 +673,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     if (rawPeak > _statMaxPeak[i]) _statMaxPeak[i] = rawPeak;
                     if (rawRms > _statMaxRMS[i]) _statMaxRMS[i] = rawRms;
 
-                    if (20.0f * (float)Math.Log10(rawRms + 1e-5) > SILENCE_THRESHOLD_DB)
+                    if (20.0f * (float)Math.Log10(rawRms + 1e-5) > AnalysisSettings.SILENCE_THRESHOLD_DB)
                     {
                         if (_statMinRMS[i] == 0.0f || rawRms < _statMinRMS[i]) _statMinRMS[i] = rawRms;
                     }
@@ -674,7 +699,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                         _fftData.getSpectrum(0, ref currentSpectrum);
 
                         _spectrumHistory.Add(currentSpectrum);
-                        if (_spectrumHistory.Count > SPECTRUM_HISTORY_COUNT) _spectrumHistory.RemoveAt(0);
+                        if (_spectrumHistory.Count > AnalysisSettings.SPECTRUM_HISTORY_COUNT) _spectrumHistory.RemoveAt(0);
 
                         _statDcOffset = currentSpectrum[0];
                     }
@@ -713,7 +738,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             Bitmap bmp = new Bitmap(width, height);
 
             using (Graphics g = Graphics.FromImage(bmp))
-            using (Pen pen = new Pen(COLOR_WAVEFORM_STATIC, 1))
+            using (Pen pen = new Pen(AppTheme.WAVEFORM_STATIC, 1))
             {
                 g.Clear(Color.Transparent);
                 int bytesPerSample = bits / 8;
@@ -761,7 +786,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
         #endregion
 
-        #region 6. Main Rendering Logic
+        #region 7. Main Rendering Logic
 
         /// <summary>
         /// Handles the Paint event of the form.
@@ -782,7 +807,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         {
             Graphics g = e.Graphics;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-            g.Clear(COLOR_BG);
+            g.Clear(AppTheme.BG);
 
             Panel panel = sender as Panel;
             int w = panel.ClientSize.Width;
@@ -794,40 +819,22 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 return;
             }
 
-            int availH = h - (PADDING * 4);
-            int hWave = (int)(availH * RATIO_WAVEFORM);
-            int hAnalysis = (int)(availH * RATIO_ANALYSIS);
+            int availH = h - (LayoutConstants.PADDING * 4);
+            int hWave = (int)(availH * LayoutConstants.RATIO_WAVEFORM);
+            int hAnalysis = (int)(availH * LayoutConstants.RATIO_ANALYSIS);
             int hStats = availH - hWave - hAnalysis;
 
-            Rectangle rectWave = new Rectangle(PADDING, PADDING, w - (PADDING * 2), hWave);
-            Rectangle rectAnalysis = new Rectangle(PADDING, rectWave.Bottom + PADDING, w - (PADDING * 2), hAnalysis);
-            Rectangle rectStats = new Rectangle(PADDING, rectAnalysis.Bottom + PADDING, w - (PADDING * 2), hStats);
+            Rectangle rectWave = new Rectangle(LayoutConstants.PADDING, LayoutConstants.PADDING, w - (LayoutConstants.PADDING * 2), hWave);
+            Rectangle rectAnalysis = new Rectangle(LayoutConstants.PADDING, rectWave.Bottom + LayoutConstants.PADDING, w - (LayoutConstants.PADDING * 2), hAnalysis);
+            Rectangle rectStats = new Rectangle(LayoutConstants.PADDING, rectAnalysis.Bottom + LayoutConstants.PADDING, w - (LayoutConstants.PADDING * 2), hStats);
 
             DrawTimelineAndVectorscope(g, rectWave);
             DrawAnalysisPanel(g, rectAnalysis);
             DrawDetailedStats(g, rectStats);
         }
 
-
         /// <summary>
-        /// Draws centered text on the canvas when no audio is loaded.
-        /// </summary>
-        /// <param name="g">The Graphics object used for drawing.</param>
-        /// <param name="msg">The message string to display.</param>
-        /// <param name="offset">The vertical offset to start drawing from.</param>
-        /// <param name="height">The height of the drawing area.</param>
-        private void DrawCenterText(Graphics g, string msg, int offset, int height)
-        {
-            using (Font font = new Font("Segoe UI", 10f))
-            using (Brush textBrush = new SolidBrush(COLOR_LABEL))
-            {
-                SizeF size = g.MeasureString(msg, font);
-                g.DrawString(msg, font, textBrush, (this.panelDrawingSurface.Width - size.Width) / 2, offset + (height - size.Height) / 2);
-            }
-        }
-
-        /// <summary>
-        /// Draws the top section, which contains two separate panels for Timeline and Vectorscope.
+        /// Draws the top section, which contains the Timeline and Vectorscope panels.
         /// </summary>
         /// <param name="g">The Graphics object used for drawing.</param>
         /// <param name="bounds">The rectangular area where the section will be drawn.</param>
@@ -844,21 +851,21 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             Rectangle rectTimelinePanel = new Rectangle(
                 bounds.X,
                 bounds.Y,
-                bounds.Width - vectorscopePanelSize - PADDING,
+                bounds.Width - vectorscopePanelSize - LayoutConstants.PADDING,
                 bounds.Height
             );
 
             // Draw the Timeline Panel.
-            using (Brush panelBrush = new SolidBrush(COLOR_PANEL_BG))
-            using (Pen borderPen = new Pen(COLOR_GRID))
-            using (Brush titleBrush = new SolidBrush(COLOR_AXIS_TEXT))
+            using (Brush panelBrush = new SolidBrush(AppTheme.PANEL_BG))
+            using (Pen borderPen = new Pen(AppTheme.GRID))
+            using (Brush titleBrush = new SolidBrush(AppTheme.AXIS_TEXT))
             {
                 g.FillRectangle(panelBrush, rectTimelinePanel);
                 g.DrawRectangle(borderPen, rectTimelinePanel);
                 Region prev = g.Clip;
                 g.SetClip(rectTimelinePanel);
 
-                Rectangle waveArea = new Rectangle(rectTimelinePanel.X + PADDING, rectTimelinePanel.Y + 20, rectTimelinePanel.Width - PADDING * 2, rectTimelinePanel.Height - 20 - PADDING);
+                Rectangle waveArea = new Rectangle(rectTimelinePanel.X + LayoutConstants.PADDING, rectTimelinePanel.Y + 20, rectTimelinePanel.Width - LayoutConstants.PADDING * 2, rectTimelinePanel.Height - 20 - LayoutConstants.PADDING);
                 if (_staticWaveformBitmap != null) g.DrawImage(_staticWaveformBitmap, waveArea);
 
                 if (_activeChannel.hasHandle() && _totalLengthMs > 0)
@@ -867,7 +874,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     float progress = _totalLengthMs > 0 ? (float)positionMs / _totalLengthMs : 0;
                     int xPos = waveArea.X + (int)(waveArea.Width * progress);
 
-                    using (Pen playheadPen = new Pen(COLOR_PLAYHEAD, 1))
+                    using (Pen playheadPen = new Pen(AppTheme.PLAYHEAD, 1))
                     {
                         g.DrawLine(playheadPen, xPos, rectTimelinePanel.Top, xPos, rectTimelinePanel.Bottom);
                     }
@@ -889,7 +896,6 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             DrawVectorscope(g, rectVectorscopePanel);
         }
 
-
         /// <summary>
         /// Draws the middle panel containing dynamic analysis tools.
         /// </summary>
@@ -897,9 +903,9 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <param name="bounds">The rectangular area where the panel will be drawn.</param>
         private void DrawAnalysisPanel(Graphics g, Rectangle bounds)
         {
-            using (Brush panelBrush = new SolidBrush(COLOR_PANEL_BG))
-            using (Pen borderPen = new Pen(COLOR_GRID))
-            using (Brush titleBrush = new SolidBrush(COLOR_AXIS_TEXT))
+            using (Brush panelBrush = new SolidBrush(AppTheme.PANEL_BG))
+            using (Pen borderPen = new Pen(AppTheme.GRID))
+            using (Brush titleBrush = new SolidBrush(AppTheme.AXIS_TEXT))
             {
                 g.FillRectangle(panelBrush, bounds);
                 g.DrawRectangle(borderPen, bounds);
@@ -934,7 +940,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 // Draw a separator line between the two tool views.
                 if (_splitRatio > 0.01f && _splitRatio < 0.99f)
                 {
-                    using (Pen separatorPen = new Pen(COLOR_GRID))
+                    using (Pen separatorPen = new Pen(AppTheme.GRID))
                     {
                         g.DrawLine(separatorPen, splitPoint, rectRender.Top, splitPoint, rectRender.Bottom);
                     }
@@ -960,9 +966,41 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             }
         }
 
+        /// <summary>
+        /// Draws the detailed statistics panel including meters, numeric stats, and loudness info.
+        /// </summary>
+        /// <param name="g">The Graphics object used for drawing.</param>
+        /// <param name="bounds">The rectangular area where the statistics will be drawn.</param>
+        private void DrawDetailedStats(Graphics g, Rectangle bounds)
+        {
+            using (Brush panelBrush = new SolidBrush(AppTheme.PANEL_BG))
+            using (Pen borderPen = new Pen(AppTheme.GRID))
+            using (Pen separatorPen = new Pen(AppTheme.GRID))
+            {
+                g.FillRectangle(panelBrush, bounds);
+                g.DrawRectangle(borderPen, bounds);
+                Region prev = g.Clip; g.SetClip(bounds);
+
+                int metersPanelWidth = CalculateMetersPanelWidth(_lastChannelCount);
+
+                Rectangle rMeters = new Rectangle(bounds.X, bounds.Y, metersPanelWidth, bounds.Height);
+                Rectangle rRight = new Rectangle(bounds.Right - LayoutConstants.LOUDNESS_PANEL_WIDTH, bounds.Y, LayoutConstants.LOUDNESS_PANEL_WIDTH, bounds.Height);
+                Rectangle rStats = new Rectangle(rMeters.Right, bounds.Y, rRight.Left - rMeters.Right, bounds.Height);
+
+                g.DrawLine(separatorPen, rMeters.Right, bounds.Top + 10, rMeters.Right, bounds.Bottom - 10);
+                g.DrawLine(separatorPen, rStats.Right, bounds.Top + 10, rStats.Right, bounds.Bottom - 10);
+
+                DrawVerticalMeters(g, rMeters, _lastChannelCount);
+                DrawStatsTable(g, rStats);
+                DrawLoudnessPanel(g, rRight);
+
+                g.Clip = prev;
+            }
+        }
+
         #endregion
 
-        #region 7. Sub-Renderers for Analysis Panel
+        #region 8. Sub-Renderers
 
         /// <summary>
         /// Draws the real-time frequency spectrum analyzer.
@@ -981,24 +1019,24 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
             if (graphRect.Width <= 0 || graphRect.Height <= 0) { g.Clip = prev; return; }
 
-            using (Brush bgBrush = new SolidBrush(COLOR_GRAPH_BG))
+            using (Brush bgBrush = new SolidBrush(AppTheme.GRAPH_BG))
             {
                 g.FillRectangle(bgBrush, graphRect);
             }
 
-            using (Pen gridPen = new Pen(COLOR_GRID) { DashStyle = DashStyle.Dot })
-            using (Brush axisBrush = new SolidBrush(COLOR_AXIS_TEXT))
+            using (Pen gridPen = new Pen(AppTheme.GRID) { DashStyle = DashStyle.Dot })
+            using (Brush axisBrush = new SolidBrush(AppTheme.AXIS_TEXT))
             using (StringFormat sfRight = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center })
             using (StringFormat sfCenter = new StringFormat { Alignment = StringAlignment.Center })
             {
                 // Draw Y-Axis (dB) with standard audio level markers.
-                float dbRange = SPECTRUM_MAX_DB - SPECTRUM_MIN_DB;
+                float dbRange = AnalysisSettings.SPECTRUM_MAX_DB - AnalysisSettings.SPECTRUM_MIN_DB;
                 float[] dbMarkers = { 0, -6, -12, -24, -36, -48, -60 };
 
                 foreach (float db in dbMarkers)
                 {
-                    if (db > SPECTRUM_MAX_DB || db < SPECTRUM_MIN_DB) continue;
-                    int y = graphRect.Top + (int)((SPECTRUM_MAX_DB - db) / dbRange * graphRect.Height);
+                    if (db > AnalysisSettings.SPECTRUM_MAX_DB || db < AnalysisSettings.SPECTRUM_MIN_DB) continue;
+                    int y = graphRect.Top + (int)((AnalysisSettings.SPECTRUM_MAX_DB - db) / dbRange * graphRect.Height);
                     g.DrawLine(gridPen, graphRect.Left, y, graphRect.Right, y);
                     g.DrawString($"{db:F0}dB", _fontAxis, axisBrush, graphRect.Left - 4, y, sfRight);
                 }
@@ -1033,8 +1071,8 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     if (bin >= numBins) continue;
 
                     float db = 20 * (float)Math.Log10(spectrum[bin] + 1e-9);
-                    float dbRange = SPECTRUM_MAX_DB - SPECTRUM_MIN_DB;
-                    float yRatio = (db - SPECTRUM_MIN_DB) / dbRange;
+                    float dbRange = AnalysisSettings.SPECTRUM_MAX_DB - AnalysisSettings.SPECTRUM_MIN_DB;
+                    float yRatio = (db - AnalysisSettings.SPECTRUM_MIN_DB) / dbRange;
                     if (yRatio < 0) yRatio = 0;
 
                     float h = yRatio * graphRect.Height;
@@ -1042,7 +1080,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     if (h > 1)
                     {
                         float barX = graphRect.Left + x;
-                        using (Brush b = new LinearGradientBrush(new PointF(barX, graphRect.Bottom), new PointF(barX, graphRect.Bottom - h), COLOR_FFT_BOTTOM, COLOR_FFT_TOP))
+                        using (Brush b = new LinearGradientBrush(new PointF(barX, graphRect.Bottom), new PointF(barX, graphRect.Bottom - h), AppTheme.FFT_BOTTOM, AppTheme.FFT_TOP))
                         {
                             g.FillRectangle(b, barX, graphRect.Bottom - h, 1, h);
                         }
@@ -1069,7 +1107,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
             if (graphRect.Width <= 0 || graphRect.Height <= 0) { g.Clip = prev; return; }
 
-            using (Brush bgBrush = new SolidBrush(COLOR_GRAPH_BG))
+            using (Brush bgBrush = new SolidBrush(AppTheme.GRAPH_BG))
             {
                 g.FillRectangle(bgBrush, graphRect);
             }
@@ -1108,8 +1146,8 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             g.DrawImage(_spectrogramBitmap, graphRect);
 
             // Draw the Y-Axis (Frequency) grid and labels.
-            using (Pen gridPen = new Pen(COLOR_GRID) { DashStyle = DashStyle.Dot })
-            using (Brush axisBrush = new SolidBrush(COLOR_AXIS_TEXT))
+            using (Pen gridPen = new Pen(AppTheme.GRID) { DashStyle = DashStyle.Dot })
+            using (Brush axisBrush = new SolidBrush(AppTheme.AXIS_TEXT))
             using (StringFormat sfRight = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center })
             {
                 float[] freqMarkers = { 100, 500, 1000, 5000, 10000, 20000 };
@@ -1143,14 +1181,14 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
             if (graphRect.Width <= 0 || graphRect.Height <= 0) { g.Clip = prev; return; }
 
-            using (Brush bgBrush = new SolidBrush(COLOR_GRAPH_BG))
+            using (Brush bgBrush = new SolidBrush(AppTheme.GRAPH_BG))
             {
                 g.FillRectangle(bgBrush, graphRect);
             }
 
             // Draw the axis grid and labels.
-            using (Pen gridPen = new Pen(COLOR_GRID) { DashStyle = DashStyle.Dot })
-            using (Brush axisBrush = new SolidBrush(COLOR_AXIS_TEXT))
+            using (Pen gridPen = new Pen(AppTheme.GRID) { DashStyle = DashStyle.Dot })
+            using (Brush axisBrush = new SolidBrush(AppTheme.AXIS_TEXT))
             using (StringFormat sfRight = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center })
             {
                 // Draw Y-Axis (Amplitude).
@@ -1182,7 +1220,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 }
 
                 g.SmoothingMode = SmoothingMode.AntiAlias;
-                using (Pen wavePen = new Pen(COLOR_OSCILLOSCOPE, 1.5f))
+                using (Pen wavePen = new Pen(AppTheme.OSCILLOSCOPE, 1.5f))
                 {
                     g.DrawLines(wavePen, points);
                 }
@@ -1199,8 +1237,8 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         private void DrawVectorscope(Graphics g, Rectangle bounds)
         {
             // Draw the panel's main background and border.
-            using (Brush panelBrush = new SolidBrush(COLOR_PANEL_BG))
-            using (Pen borderPen = new Pen(COLOR_GRID))
+            using (Brush panelBrush = new SolidBrush(AppTheme.PANEL_BG))
+            using (Pen borderPen = new Pen(AppTheme.GRID))
             {
                 g.FillRectangle(panelBrush, bounds);
                 g.DrawRectangle(borderPen, bounds);
@@ -1214,7 +1252,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             if (graphRect.Width <= 0 || graphRect.Height <= 0) { g.Clip = prev; return; }
 
             // Fill the graph area with a black background.
-            using (Brush bgBrush = new SolidBrush(COLOR_GRAPH_BG))
+            using (Brush bgBrush = new SolidBrush(AppTheme.GRAPH_BG))
             {
                 g.FillRectangle(bgBrush, graphRect);
             }
@@ -1224,7 +1262,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             float radius = Math.Min(graphRect.Width, graphRect.Height) / 2.0f;
 
             // Draw the grid lines first for proper layering.
-            using (Pen gridPen = new Pen(COLOR_GRID))
+            using (Pen gridPen = new Pen(AppTheme.GRID))
             {
                 g.DrawEllipse(gridPen, center.X - radius, center.Y - radius, radius * 2, radius * 2);
                 g.DrawLine(gridPen, center.X, graphRect.Top, center.X, graphRect.Bottom);
@@ -1234,7 +1272,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             }
 
             // Draw the title string on top of the grid.
-            using (Brush titleBrush = new SolidBrush(COLOR_AXIS_TEXT))
+            using (Brush titleBrush = new SolidBrush(AppTheme.AXIS_TEXT))
             {
                 g.DrawString("VECTORSCOPE", _fontTitle, titleBrush, bounds.X + 5, bounds.Y);
             }
@@ -1261,7 +1299,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 }
 
                 g.SmoothingMode = SmoothingMode.AntiAlias;
-                using (Pen scopePen = new Pen(COLOR_VECTORSCOPE, 1.0f))
+                using (Pen scopePen = new Pen(AppTheme.VECTORSCOPE, 1.0f))
                 {
                     g.DrawLines(scopePen, points);
                 }
@@ -1270,7 +1308,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             else if (_lastChannelCount < 2)
             {
                 using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-                using (Brush infoBrush = new SolidBrush(COLOR_LABEL))
+                using (Brush infoBrush = new SolidBrush(AppTheme.LABEL))
                 {
                     g.DrawString("Stereo Required", _fontAxis, infoBrush, graphRect, sf);
                 }
@@ -1280,37 +1318,22 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
         #endregion
 
-        #region 8. Rendering Helpers & Stats
+        #region 9. Rendering Helpers & Utilities
 
         /// <summary>
-        /// Draws the detailed statistics panel including meters, numeric stats, and loudness info.
+        /// Draws centered text on the canvas.
         /// </summary>
         /// <param name="g">The Graphics object used for drawing.</param>
-        /// <param name="bounds">The rectangular area where the statistics will be drawn.</param>
-        private void DrawDetailedStats(Graphics g, Rectangle bounds)
+        /// <param name="msg">The message string to display.</param>
+        /// <param name="offset">The vertical offset to start drawing from.</param>
+        /// <param name="height">The height of the drawing area.</param>
+        private void DrawCenterText(Graphics g, string msg, int offset, int height)
         {
-            using (Brush panelBrush = new SolidBrush(COLOR_PANEL_BG))
-            using (Pen borderPen = new Pen(COLOR_GRID))
-            using (Pen separatorPen = new Pen(COLOR_GRID))
+            using (Font font = new Font("Segoe UI", 10f))
+            using (Brush textBrush = new SolidBrush(AppTheme.LABEL))
             {
-                g.FillRectangle(panelBrush, bounds);
-                g.DrawRectangle(borderPen, bounds);
-                Region prev = g.Clip; g.SetClip(bounds);
-
-                int metersPanelWidth = CalculateMetersPanelWidth(_lastChannelCount);
-
-                Rectangle rMeters = new Rectangle(bounds.X, bounds.Y, metersPanelWidth, bounds.Height);
-                Rectangle rRight = new Rectangle(bounds.Right - LOUDNESS_PANEL_WIDTH, bounds.Y, LOUDNESS_PANEL_WIDTH, bounds.Height);
-                Rectangle rStats = new Rectangle(rMeters.Right, bounds.Y, rRight.Left - rMeters.Right, bounds.Height);
-
-                g.DrawLine(separatorPen, rMeters.Right, bounds.Top + 10, rMeters.Right, bounds.Bottom - 10);
-                g.DrawLine(separatorPen, rStats.Right, bounds.Top + 10, rStats.Right, bounds.Bottom - 10);
-
-                DrawVerticalMeters(g, rMeters, _lastChannelCount);
-                DrawStatsTable(g, rStats);
-                DrawLoudnessPanel(g, rRight);
-
-                g.Clip = prev;
+                SizeF size = g.MeasureString(msg, font);
+                g.DrawString(msg, font, textBrush, (this.panelDrawingSurface.Width - size.Width) / 2, offset + (height - size.Height) / 2);
             }
         }
 
@@ -1335,7 +1358,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <param name="channels">The number of channels to draw.</param>
         private void DrawVerticalMeters(Graphics g, Rectangle bounds, int channels)
         {
-            using (Brush titleBrush = new SolidBrush(COLOR_AXIS_TEXT))
+            using (Brush titleBrush = new SolidBrush(AppTheme.AXIS_TEXT))
             {
                 g.DrawString("METERS", _fontTitle, titleBrush, bounds.X + 5, bounds.Y + 5);
             }
@@ -1349,13 +1372,13 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
             float[] dbTicks = { 0, -6, -12, -24, -36, -48, -60 };
             int rulerX = startX - 25;
-            using (Pen gridPen = new Pen(COLOR_GRID))
-            using (Brush textBrush = new SolidBrush(COLOR_AXIS_TEXT))
+            using (Pen gridPen = new Pen(AppTheme.GRID))
+            using (Brush textBrush = new SolidBrush(AppTheme.AXIS_TEXT))
             {
                 StringFormat sfRight = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
                 foreach (float db in dbTicks)
                 {
-                    float ratio = Math.Max(0, Math.Min(1, (db - METER_MIN_DB) / (0 - METER_MIN_DB)));
+                    float ratio = Math.Max(0, Math.Min(1, (db - AnalysisSettings.METER_MIN_DB) / (0 - AnalysisSettings.METER_MIN_DB)));
                     int yPos = meterAreaY + meterAreaH - (int)(ratio * meterAreaH);
                     g.DrawString($"{db}", _fontAxis, textBrush, rulerX + 20, yPos, sfRight);
                     g.DrawLine(gridPen, rulerX + 22, yPos, startX + totalMeterW, yPos);
@@ -1366,7 +1389,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             {
                 int xPos = startX + (i * (meterW + meterSpacing));
                 Rectangle meterRect = new Rectangle(xPos, meterAreaY, meterW, meterAreaH);
-                using (Brush meterBgBrush = new SolidBrush(COLOR_METER_BG))
+                using (Brush meterBgBrush = new SolidBrush(AppTheme.METER_BG))
                 {
                     g.FillRectangle(meterBgBrush, meterRect);
                 }
@@ -1377,14 +1400,14 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
                 float rmsDb = 20.0f * (float)Math.Log10(rms + 1e-5);
                 float peakDb = 20.0f * (float)Math.Log10(peak + 1e-5);
-                float rmsRatio = Math.Max(0, Math.Min(1, (rmsDb - METER_MIN_DB) / (0 - METER_MIN_DB)));
-                float peakRatio = Math.Max(0, Math.Min(1, (peakDb - METER_MIN_DB) / (0 - METER_MIN_DB)));
+                float rmsRatio = Math.Max(0, Math.Min(1, (rmsDb - AnalysisSettings.METER_MIN_DB) / (0 - AnalysisSettings.METER_MIN_DB)));
+                float peakRatio = Math.Max(0, Math.Min(1, (peakDb - AnalysisSettings.METER_MIN_DB) / (0 - AnalysisSettings.METER_MIN_DB)));
                 int rmsH = (int)(rmsRatio * meterAreaH);
                 int rmsY = meterAreaY + meterAreaH - rmsH;
 
-                Color barColor = COLOR_METER_LOW;
-                if (rmsDb > -6) barColor = COLOR_METER_MID;
-                if (rmsDb > 0) barColor = COLOR_METER_HIGH;
+                Color barColor = AppTheme.METER_LOW;
+                if (rmsDb > -6) barColor = AppTheme.METER_MID;
+                if (rmsDb > 0) barColor = AppTheme.METER_HIGH;
 
                 using (Brush barBrush = new SolidBrush(barColor))
                 {
@@ -1392,7 +1415,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 }
 
                 int peakY = meterAreaY + meterAreaH - (int)(peakRatio * meterAreaH);
-                using (Pen peakPen = new Pen(COLOR_VAL_NORMAL))
+                using (Pen peakPen = new Pen(AppTheme.VAL_NORMAL))
                 {
                     g.DrawLine(peakPen, xPos, peakY, xPos + meterW, peakY);
                 }
@@ -1400,12 +1423,12 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 int clipH = 4;
                 Rectangle clipBox = new Rectangle(xPos, meterAreaY - clipH - 2, meterW, clipH);
                 bool showClip = (_clipResetTime != null && _clipResetTime.Length > i && DateTime.Now.Ticks < _clipResetTime[i]);
-                using (Brush clipBrush = new SolidBrush(showClip ? COLOR_CLIP_ON : COLOR_CLIP_OFF))
+                using (Brush clipBrush = new SolidBrush(showClip ? AppTheme.CLIP_ON : AppTheme.CLIP_OFF))
                 {
                     g.FillRectangle(clipBrush, clipBox);
                 }
 
-                using (Brush labelBrush = new SolidBrush(COLOR_LABEL))
+                using (Brush labelBrush = new SolidBrush(AppTheme.LABEL))
                 {
                     g.DrawString($"Ch{i + 1}", _fontAxis, labelBrush, xPos, meterAreaY + meterAreaH + 2);
                 }
@@ -1420,7 +1443,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         private void DrawStatsTable(Graphics g, Rectangle bounds)
         {
             if (bounds.Width < 150) return;
-            using (Brush titleBrush = new SolidBrush(COLOR_AXIS_TEXT))
+            using (Brush titleBrush = new SolidBrush(AppTheme.AXIS_TEXT))
             {
                 g.DrawString("CHANNEL STATISTICS", _fontTitle, titleBrush, bounds.X + 10, bounds.Y + 5);
             }
@@ -1475,7 +1498,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             if (numChannels > 4) metricWidth = (int)(width * 0.35f);
             int valueWidth = (width - metricWidth) / numChannels;
 
-            using (Brush headerBrush = new SolidBrush(COLOR_VAL_NORMAL))
+            using (Brush headerBrush = new SolidBrush(AppTheme.VAL_NORMAL))
             {
                 g.DrawString("METRIC", _fontTitle, headerBrush, x, y);
 
@@ -1506,22 +1529,126 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             if (numChannels > 4) metricWidth = (int)(width * 0.35f);
             int valueWidth = (width - metricWidth) / numChannels;
 
-            using (Brush labelBrush = new SolidBrush(COLOR_LABEL))
+            using (Brush labelBrush = new SolidBrush(AppTheme.LABEL))
             {
                 g.DrawString(metric, _fontLabel, labelBrush, x, y);
             }
 
             for (int i = 0; i < numChannels; i++)
             {
-                Color valColor = COLOR_VAL_NORMAL;
-                if (checkPeak && ParseDb(values[i]) >= 0) valColor = COLOR_VAL_DANGER;
-                if (checkClip && int.Parse(values[i]) > 0) valColor = COLOR_VAL_WARNING;
+                Color valColor = AppTheme.VAL_NORMAL;
+                if (checkPeak && ParseDb(values[i]) >= 0) valColor = AppTheme.VAL_DANGER;
+                if (checkClip && int.Parse(values[i]) > 0) valColor = AppTheme.VAL_WARNING;
 
                 using (Brush bVal = new SolidBrush(valColor))
                 {
                     int colX = x + metricWidth + (i * valueWidth);
                     g.DrawString(values[i], _fontValue, bVal, colX, y);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Draws the loudness information panel.
+        /// </summary>
+        /// <param name="g">The Graphics object used for drawing.</param>
+        /// <param name="bounds">The rectangular area where the panel will be drawn.</param>
+        private void DrawLoudnessPanel(Graphics g, Rectangle bounds)
+        {
+            using (Brush titleBrush = new SolidBrush(AppTheme.AXIS_TEXT))
+            {
+                g.DrawString("LOUDNESS", _fontTitle, titleBrush, bounds.X + 10, bounds.Y + 5);
+            }
+
+            int startY = bounds.Y + 55;
+            int rowH = 18;
+            int startX = bounds.X + 10;
+            int valX = startX + (int)(bounds.Width * 0.5f);
+
+            var colorIntegrated = AppTheme.VAL_NORMAL;
+            var colorTruePeak = AppTheme.VAL_NORMAL;
+            string feedbackText = " ";
+            Color feedbackColor = AppTheme.LABEL;
+
+            if (_selectedStandard.TargetIntegratedLoudness.HasValue)
+            {
+                float targetLoudness = _selectedStandard.TargetIntegratedLoudness.Value;
+                float measuredLoudness = _loudnessInfo.integratedloudness;
+                float diff = measuredLoudness - targetLoudness;
+
+                if (Math.Abs(diff) <= 0.5f)
+                {
+                    colorIntegrated = AppTheme.VAL_OK;
+                    feedbackText = "Loudness: OK";
+                    feedbackColor = AppTheme.VAL_OK;
+                }
+                else
+                {
+                    colorIntegrated = AppTheme.VAL_WARNING;
+                    feedbackText = $"Loudness: {(diff > 0 ? "+" : "")}{diff:F1} LU";
+                    feedbackColor = AppTheme.VAL_WARNING;
+                }
+            }
+            else { feedbackText = "Absolute Scale"; }
+
+            if (_selectedStandard.MaxTruePeak.HasValue && _statMaxTruePeak > _selectedStandard.MaxTruePeak.Value)
+            {
+                colorTruePeak = AppTheme.VAL_DANGER;
+            }
+
+            DrawLoudnessRowDynamic(g, startX, valX, startY + (rowH * 0), "Integrated", $"{_loudnessInfo.integratedloudness:F1} LUFS", colorIntegrated);
+            DrawLoudnessRowDynamic(g, startX, valX, startY + (rowH * 1), "Short-Term Max", $"{_statMaxShortTermLUFS:F1} LUFS", AppTheme.VAL_NORMAL);
+            DrawLoudnessRowDynamic(g, startX, valX, startY + (rowH * 2), "Momentary Max", $"{_statMaxMomentaryLUFS:F1} LUFS", AppTheme.VAL_NORMAL);
+            DrawLoudnessRowDynamic(g, startX, valX, startY + (rowH * 3), "True Peak Max", $"{_statMaxTruePeak:F2} dBTP", colorTruePeak);
+
+            using (StringFormat sfCenter = new StringFormat { Alignment = StringAlignment.Center })
+            using (Brush feedbackBrush = new SolidBrush(feedbackColor))
+            {
+                g.DrawString(feedbackText, _fontTitle, feedbackBrush, bounds.X + (bounds.Width / 2), bounds.Bottom - 55, sfCenter);
+            }
+        }
+
+        /// <summary>
+        /// Draws a single row of dynamic statistics with label and value columns.
+        /// </summary>
+        /// <param name="g">The Graphics object used for drawing.</param>
+        /// <param name="y">The Y coordinate of the row.</param>
+        /// <param name="cols">An array of X coordinates for each column.</param>
+        /// <param name="vals">An array of string values for each column.</param>
+        private void DrawStatRowDynamic(Graphics g, int y, int[] cols, string[] vals)
+        {
+            using (Brush labelBrush = new SolidBrush(AppTheme.LABEL))
+            {
+                g.DrawString(vals[0], _fontLabel, labelBrush, cols[0], y);
+            }
+            if (vals.Length > 1)
+            {
+                using (Brush valueBrush = new SolidBrush(AppTheme.VAL_NORMAL))
+                {
+                    g.DrawString(vals[1], _fontValue, valueBrush, cols[1], y);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Draws a row of loudness data with specific coloring for the value.
+        /// </summary>
+        /// <param name="g">The Graphics object used for drawing.</param>
+        /// <param name="labelX">The X coordinate for the label.</param>
+        /// <param name="valX">The X coordinate for the value.</param>
+        /// <param name="y">The Y coordinate for the row.</param>
+        /// <param name="label">The label text.</param>
+        /// <param name="val">The value text.</param>
+        /// <param name="valColor">The color for the value text.</param>
+        private void DrawLoudnessRowDynamic(Graphics g, int labelX, int valX, int y, string label, string val, Color valColor)
+        {
+            using (Brush labelBrush = new SolidBrush(AppTheme.LABEL))
+            {
+                g.DrawString(label, _fontLabel, labelBrush, labelX, y);
+            }
+            using (Brush valBrush = new SolidBrush(valColor))
+            {
+                g.DrawString(val, _fontValue, valBrush, valX, y);
             }
         }
 
@@ -1546,110 +1673,6 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 return (channelIndex < labels.Length) ? labels[channelIndex] : $"Ch{channelIndex + 1}";
             }
             return $"Ch{channelIndex + 1}";
-        }
-
-        /// <summary>
-        /// Draws the loudness information panel.
-        /// </summary>
-        /// <param name="g">The Graphics object used for drawing.</param>
-        /// <param name="bounds">The rectangular area where the panel will be drawn.</param>
-        private void DrawLoudnessPanel(Graphics g, Rectangle bounds)
-        {
-            using (Brush titleBrush = new SolidBrush(COLOR_AXIS_TEXT))
-            {
-                g.DrawString("LOUDNESS", _fontTitle, titleBrush, bounds.X + 10, bounds.Y + 5);
-            }
-
-            int startY = bounds.Y + 55;
-            int rowH = 18;
-            int startX = bounds.X + 10;
-            int valX = startX + (int)(bounds.Width * 0.5f);
-
-            var colorIntegrated = COLOR_VAL_NORMAL;
-            var colorTruePeak = COLOR_VAL_NORMAL;
-            string feedbackText = " ";
-            Color feedbackColor = COLOR_LABEL;
-
-            if (_selectedStandard.TargetIntegratedLoudness.HasValue)
-            {
-                float targetLoudness = _selectedStandard.TargetIntegratedLoudness.Value;
-                float measuredLoudness = _loudnessInfo.integratedloudness;
-                float diff = measuredLoudness - targetLoudness;
-
-                if (Math.Abs(diff) <= 0.5f)
-                {
-                    colorIntegrated = COLOR_VAL_OK;
-                    feedbackText = "Loudness: OK";
-                    feedbackColor = COLOR_VAL_OK;
-                }
-                else
-                {
-                    colorIntegrated = COLOR_VAL_WARNING;
-                    feedbackText = $"Loudness: {(diff > 0 ? "+" : "")}{diff:F1} LU";
-                    feedbackColor = COLOR_VAL_WARNING;
-                }
-            }
-            else { feedbackText = "Absolute Scale"; }
-
-            if (_selectedStandard.MaxTruePeak.HasValue && _statMaxTruePeak > _selectedStandard.MaxTruePeak.Value)
-            {
-                colorTruePeak = COLOR_VAL_DANGER;
-            }
-
-            DrawLoudnessRowDynamic(g, startX, valX, startY + (rowH * 0), "Integrated", $"{_loudnessInfo.integratedloudness:F1} LUFS", colorIntegrated);
-            DrawLoudnessRowDynamic(g, startX, valX, startY + (rowH * 1), "Short-Term Max", $"{_statMaxShortTermLUFS:F1} LUFS", COLOR_VAL_NORMAL);
-            DrawLoudnessRowDynamic(g, startX, valX, startY + (rowH * 2), "Momentary Max", $"{_statMaxMomentaryLUFS:F1} LUFS", COLOR_VAL_NORMAL);
-            DrawLoudnessRowDynamic(g, startX, valX, startY + (rowH * 3), "True Peak Max", $"{_statMaxTruePeak:F2} dBTP", colorTruePeak);
-
-            using (StringFormat sfCenter = new StringFormat { Alignment = StringAlignment.Center })
-            using (Brush feedbackBrush = new SolidBrush(feedbackColor))
-            {
-                g.DrawString(feedbackText, _fontTitle, feedbackBrush, bounds.X + (bounds.Width / 2), bounds.Bottom - 55, sfCenter);
-            }
-        }
-
-        /// <summary>
-        /// Draws a single row of dynamic statistics with label and value columns.
-        /// </summary>
-        /// <param name="g">The Graphics object used for drawing.</param>
-        /// <param name="y">The Y coordinate of the row.</param>
-        /// <param name="cols">An array of X coordinates for each column.</param>
-        /// <param name="vals">An array of string values for each column.</param>
-        private void DrawStatRowDynamic(Graphics g, int y, int[] cols, string[] vals)
-        {
-            using (Brush labelBrush = new SolidBrush(COLOR_LABEL))
-            {
-                g.DrawString(vals[0], _fontLabel, labelBrush, cols[0], y);
-            }
-            if (vals.Length > 1)
-            {
-                using (Brush valueBrush = new SolidBrush(COLOR_VAL_NORMAL))
-                {
-                    g.DrawString(vals[1], _fontValue, valueBrush, cols[1], y);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Draws a row of loudness data with specific coloring for the value.
-        /// </summary>
-        /// <param name="g">The Graphics object used for drawing.</param>
-        /// <param name="labelX">The X coordinate for the label.</param>
-        /// <param name="valX">The X coordinate for the value.</param>
-        /// <param name="y">The Y coordinate for the row.</param>
-        /// <param name="label">The label text.</param>
-        /// <param name="val">The value text.</param>
-        /// <param name="valColor">The color for the value text.</param>
-        private void DrawLoudnessRowDynamic(Graphics g, int labelX, int valX, int y, string label, string val, Color valColor)
-        {
-            using (Brush labelBrush = new SolidBrush(COLOR_LABEL))
-            {
-                g.DrawString(label, _fontLabel, labelBrush, labelX, y);
-            }
-            using (Brush valBrush = new SolidBrush(valColor))
-            {
-                g.DrawString(val, _fontValue, valBrush, valX, y);
-            }
         }
 
         /// <summary>
