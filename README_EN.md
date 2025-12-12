@@ -126,7 +126,7 @@ This update focuses on overhauling the existing rebuild system to support **batc
     -   **Code Refactoring:** Refactored the internal code of several classes, including `AudioAnalyzerForm` and `IndexToolForm`, to improve readability and maintainability.
     -   **Improved Log System Flexibility:** Enhanced the internal structure of the `LogWriter` class to make it easier to record logs in various formats.
 
-<br>
+<BR>
 
 <details>
 <summary>📜 Previous Updates - Click to Expand</summary>
@@ -240,7 +240,7 @@ This update focused on preventing data loss during file extraction and significa
 <BR>
 
 ## 💾 Download <BR>
-**⚠️ To comply with copyright and licensing policies, this repository and distribution files do not contain FMOD API source code or binary files.** <br>
+**⚠️ To comply with copyright and licensing policies, this repository and distribution files do not contain FMOD API source code or binary files.** <BR>
 To **Develop (Dev)** or **Use (Build)** the program, you must manually copy the necessary files to the appropriate folders by referring to the table below. <BR>
 
 | Program                                | URL                                                | Requirement | Note                                                                                           |
