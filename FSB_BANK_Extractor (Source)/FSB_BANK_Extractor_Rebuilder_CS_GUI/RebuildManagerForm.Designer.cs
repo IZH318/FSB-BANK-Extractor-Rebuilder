@@ -13,7 +13,7 @@
  *
  * Technical Environment:
  *  - Target Framework: .NET Framework 4.8
- *  - Last Update: 2025-12-12
+ *  - Last Update: 2025-12-13
  */
 
 namespace FSB_BANK_Extractor_Rebuilder_CS_GUI

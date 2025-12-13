@@ -4,12 +4,13 @@
  * @author (Github) IZH318 (https://github.com/IZH318)
  *
  * @details
- * This form renders a static waveform, frequency spectrum, spectrogram, vector scope, oscilloscope,
- * and detailed loudness statistics (LUFS, True Peak) for the currently playing audio stream.
- * It strictly follows loudness standards like EBU R 128 and ATSC A/85.
+ * This form renders a static waveform, frequency spectrum, spectrogram, vectorscope, oscilloscope,
+ * and detailed loudness statistics (LUFS, True Peak) for a playing audio stream. It uses FMOD's
+ * Digital Signal Processing (DSP) units for FFT and Loudness Metering to capture data in real-time.
+ * The loudness analysis strictly follows standards like EBU R 128 and ATSC A/85.
  *
  * Key Features:
- *  - Dynamically configurable analysis panel with Split view mode.
+ *  - Dynamically configurable analysis panel with a split-view mode.
  *  - Real-time FFT spectrum analysis, spectrogram, oscilloscope, and vectorscope.
  *  - Comprehensive loudness metering (Momentary, Short-Term, Integrated, True Peak).
  *  - Compliance checks against various broadcasting standards.
@@ -18,7 +19,7 @@
  * Technical Environment:
  *  - FMOD Engine Version: v2.03.11 (Studio API minor release, build 158528)
  *  - Target Framework: .NET Framework 4.8
- *  - Last Update: 2025-12-12
+ *  - Last Update: 2025-12-13
  */
 
 using System;

@@ -8,9 +8,14 @@
  * or a range/list of indices (e.g., "10-20, 35") to select multiple items at once.
  * The form's logic dynamically adjusts UI options based on the input format.
  *
+ * Key Features:
+ *  - Supports single index input for "Jump" functionality.
+ *  - Supports range and list input (e.g., "5-10, 15") for "Select" functionality.
+ *  - Dynamically disables the "Jump" option when a multi-selection format is detected.
+ *
  * Technical Environment:
  *  - Target Framework: .NET Framework 4.8
- *  - Last Update: 2025-12-12
+ *  - Last Update: 2025-12-13
  */
 
 using System;

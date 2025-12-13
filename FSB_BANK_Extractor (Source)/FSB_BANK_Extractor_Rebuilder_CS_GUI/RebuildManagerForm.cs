@@ -11,13 +11,14 @@
  * Key Features:
  *  - Batch & Single Item Replacement: Manages one or more audio file replacements in a DataGridView.
  *  - Real-time Duration Validation: Asynchronously checks if replacement audio is longer or shorter than the original.
+ *  - Auto-Match Functionality: Scans a folder to automatically find and suggest replacement files.
  *  - Robust Error Handling: Uses explicit FMOD.RESULT checking and CancellationTokens for thread safety.
  *  - Resource Management: Implements the IDisposable pattern to correctly release FMOD systems and tasks.
  *
  * Technical Environment:
  *  - FMOD Engine Version: v2.03.11 (Studio API minor release, build 158528)
  *  - Target Framework: .NET Framework 4.8
- *  - Last Update: 2025-12-12
+ *  - Last Update: 2025-12-13
  */
 
 using System;
@@ -25,6 +26,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -406,15 +408,23 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
         /// <summary>
         /// Handles the Click event of the btnAutoMatch control.
+        /// Performs a two-step search (Exact Match & Smart Match) and asks the user for confirmation.
+        /// Updates the window title with progress percentage during scanning and applying.
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         private async void btnAutoMatch_Click(object sender, EventArgs e)
         {
-            // Ask for user confirmation before proceeding with the auto-match process.
+            // 1. Initial confirmation to prevent accidental overwrite.
             string confirmTitle = "Confirm Auto-Match";
-            string confirmMessage = "This will automatically search for replacement files in a selected folder based on the internal sound names.\n\nAny existing replacements may be overwritten.\n\nDo you want to proceed?";
-            if (MessageBox.Show(confirmMessage, confirmTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No)
+            string confirmMessage = "This will automatically search for replacement files in a selected folder.\n\n" +
+                                    "It supports two modes:\n" +
+                                    "1. Exact Match (e.g., Sound_1 -> Sound_1.wav)\n" +
+                                    "2. Smart Match (e.g., Sound_1 -> Sound.wav)\n\n" +
+                                    "No changes will be applied until you confirm the results.\n" +
+                                    "Do you want to start scanning?";
+
+            if (MessageBox.Show(confirmMessage, confirmTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.No)
             {
                 return;
             }
@@ -423,34 +433,148 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             {
                 if (fbd.ShowDialog() != DialogResult.OK) return;
 
-                SetWorkingState(true, "Auto-matching files...");
+                // Store the original form title to restore it later.
+                string originalTitle = this.Text;
+                SetWorkingState(true, "Scanning for matches...");
 
                 string folder = fbd.SelectedPath;
-                string[] exts = { ".wav", ".ogg", ".mp3", ".flac" };
-                int matchCount = 0;
+                string[] exts = { ".wav", ".ogg", ".mp3", ".flac", ".aif", ".aiff", ".m4a" };
 
-                // Iterate through each row and try to find a matching file in the selected folder.
-                foreach (DataGridViewRow row in dgvItems.Rows)
+                // Collections to store potential matches before applying them.
+                var exactMatches = new List<(DataGridViewRow Row, string Path)>();
+                var smartMatches = new List<(DataGridViewRow Row, string Path)>();
+
+                // Regex to identify filenames with numeric suffixes (e.g., "_1", "_02").
+                Regex suffixRegex = new Regex(@"_(\d+)$", RegexOptions.Compiled);
+
+                int totalRows = dgvItems.Rows.Count;
+
+                // 2. Scan Phase: Iterate through rows to find potential matches without applying them yet.
+                for (int i = 0; i < totalRows; i++)
                 {
-                    // Check for a cancellation request.
                     if (_cts.Token.IsCancellationRequested) break;
 
+                    DataGridViewRow row = dgvItems.Rows[i];
                     string internalName = row.Cells[COL_NAME].Value.ToString();
+                    bool exactFound = false;
+
+                    // Update the window title with the current scanning progress.
+                    int percent = (int)((float)(i + 1) / totalRows * 100);
+                    this.Text = $"{originalTitle} - Scanning... ({percent}%)";
+
+                    // Step 2-A: Check for Exact Match.
                     foreach (var ext in exts)
                     {
                         string candidate = Path.Combine(folder, internalName + ext);
                         if (File.Exists(candidate))
                         {
-                            await SetRowStateAsync(row, candidate);
-                            matchCount++;
+                            exactMatches.Add((row, candidate));
+                            exactFound = true;
                             break;
                         }
                     }
+
+                    // Step 2-B: Check for Smart Match (only if Exact Match failed).
+                    // Logic: If 'Sound_1' is missing, try finding 'Sound' (base name) to use as a fallback.
+                    if (!exactFound && suffixRegex.IsMatch(internalName))
+                    {
+                        string baseName = suffixRegex.Replace(internalName, ""); // Remove suffix ("_1" -> "")
+                        foreach (var ext in exts)
+                        {
+                            string baseCandidate = Path.Combine(folder, baseName + ext);
+                            if (File.Exists(baseCandidate))
+                            {
+                                smartMatches.Add((row, baseCandidate));
+                                break;
+                            }
+                        }
+                    }
+
+                    // Keep the UI responsive during the loop.
+                    if (i % 20 == 0) Application.DoEvents();
                 }
 
                 SetWorkingState(false, "Ready.");
-                UpdateWarningPanels();
-                MessageBox.Show($"Auto-Matched {matchCount} files successfully.", "Result", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                // Restore the original title before showing the message box.
+                this.Text = originalTitle;
+
+                // 3. Decision Phase: Analyze results and ask the user how to proceed.
+                int totalExact = exactMatches.Count;
+                int totalSmart = smartMatches.Count;
+
+                if (totalExact == 0 && totalSmart == 0)
+                {
+                    MessageBox.Show("No matching files found in the selected folder.", "Result", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                List<(DataGridViewRow Row, string Path)> finalApplyList = new List<(DataGridViewRow Row, string Path)>();
+                DialogResult result;
+
+                // Build the result summary message.
+                StringBuilder msg = new StringBuilder();
+                msg.AppendLine("Scan Complete.");
+                msg.AppendLine();
+                msg.AppendLine($"• Exact Matches Found: {totalExact}");
+                msg.AppendLine($"• Smart Matches Found: {totalSmart} (Suffix Ignored)");
+                msg.AppendLine();
+
+                if (totalSmart > 0)
+                {
+                    msg.AppendLine("Smart Match allows using a single file (e.g., 'Sound.wav') for multiple variations (e.g., 'Sound_1', 'Sound_2').");
+                    msg.AppendLine();
+                    msg.AppendLine("Do you want to apply ALL matches (including Smart Matches)?");
+                    msg.AppendLine("- Yes: Apply Exact + Smart Matches");
+                    msg.AppendLine("- No: Apply Exact Matches Only");
+                    msg.AppendLine("- Cancel: Do nothing");
+
+                    result = MessageBox.Show(msg.ToString(), "Select Match Strategy", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+
+                    if (result == DialogResult.Cancel) return;
+
+                    finalApplyList.AddRange(exactMatches);
+                    if (result == DialogResult.Yes)
+                    {
+                        finalApplyList.AddRange(smartMatches);
+                    }
+                }
+                else
+                {
+                    msg.AppendLine("Do you want to apply these exact matches?");
+                    result = MessageBox.Show(msg.ToString(), "Confirm Match", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+                    if (result == DialogResult.No) return;
+
+                    finalApplyList.AddRange(exactMatches);
+                }
+
+                // 4. Application Phase: Apply the selected files to the grid.
+                if (finalApplyList.Count > 0)
+                {
+                    SetWorkingState(true, $"Applying {finalApplyList.Count} files...");
+
+                    for (int i = 0; i < finalApplyList.Count; i++)
+                    {
+                        if (_cts.Token.IsCancellationRequested) break;
+
+                        var item = finalApplyList[i];
+
+                        // Update the window title with the current application progress.
+                        // Since SetRowStateAsync involves I/O and FMOD analysis, progress feedback is useful here.
+                        int percent = (int)((float)(i + 1) / finalApplyList.Count * 100);
+                        this.Text = $"{originalTitle} - Applying... ({percent}%)";
+
+                        await SetRowStateAsync(item.Row, item.Path);
+                    }
+
+                    // Final cleanup and UI update.
+                    this.Text = originalTitle;
+                    SetWorkingState(false, "Ready.");
+                    UpdateWarningPanels();
+
+                    MessageBox.Show($"Successfully applied {finalApplyList.Count} replacements.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
             }
         }
 

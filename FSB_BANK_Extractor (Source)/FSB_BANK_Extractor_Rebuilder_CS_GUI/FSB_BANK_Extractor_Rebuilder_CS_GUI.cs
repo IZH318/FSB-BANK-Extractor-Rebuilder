@@ -1,7 +1,7 @@
 ﻿/**
  * @file FSB_BANK_Extractor_Rebuilder_CS_GUI.cs
  * @brief GUI tool for browsing, playing, extracting, and rebuilding audio in FMOD Sound Bank (.fsb) and Bank (.bank) files.
- * @author (Github) IZH318 (https://github.com/IZH318)
+ * @author (Github) IZH3b18 (https://github.com/IZH318)
  *
  * @details
  * This application utilizes the FMOD Studio & Core API to analyze, preview, process, and modify FMOD audio containers.
@@ -20,11 +20,11 @@
  *
  * Technical Environment:
  *  - FMOD Engine Version: v2.03.11 (Studio API minor release, build 158528)
- *  - Architecture: Built as 'Any CPU' for native execution on both x86 and x64 platforms. Primary development and testing were conducted in an x64 environment.
+ *  - Architecture: Built as 'Any CPU' for native execution on both x86 and x64 platforms.
  *  - Target Framework: .NET Framework 4.8
- *  - Key Dependencies: Newtonsoft.Json (Required for manifest generation)
+ *  - Key Dependencies: Newtonsoft.Json
  *  - Primary Test Platform: Windows 10 64-bit
- *  - Last Update: 2025-12-12
+ *  - Last Update: 2025-12-13
  */
 
 using System;
@@ -73,8 +73,8 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         private enum ExtractLocationMode { SameAsSource, CustomPath, AskEveryTime }
 
         // Application Metadata & Versioning Constants.
-        private const string AppVersion = "3.1.0";
-        private const string AppLastUpdate = "2025-12-12";
+        private const string AppVersion = "3.2.0";
+        private const string AppLastUpdate = "2025-12-13";
         private const string AppDeveloper = "(GitHub) IZH318";
         private const string AppWebsite = "https://github.com/IZH318";
 
@@ -974,7 +974,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             catch (IOException) { return; } // Handle file access errors.
 
             // Report the result of the scanning sub-task.
-            progressReporter($"Found {fsbOffsets.Count} FSB chunk(s).", 30);
+            progressReporter($"Found {fsbOffsets.Count} potential FSB chunk(s).", 30);
 
             if (fsbOffsets.Count == 0) return;
 
@@ -986,11 +986,17 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             foreach (var offset in fsbOffsets)
             {
                 fsbCounter++;
-                // Calculate progress within this bank file's analysis phase.
                 int subProgress = 30 + (int)(((float)fsbCounter / fsbOffsets.Count) * 60);
                 progressReporter($"Parsing FSB chunk {fsbCounter}/{fsbOffsets.Count}...", subProgress);
 
                 string rawName = GetFsbInternalName(path, offset);
+
+                // If GetFsbInternalName returns null, it means the chunk is empty or invalid.
+                if (rawName == null)
+                {
+                    continue;
+                }
+
                 string baseName = !string.IsNullOrEmpty(rawName) ?
                     Path.GetFileNameWithoutExtension(rawName) :
                     Path.GetFileNameWithoutExtension(path);
@@ -998,6 +1004,8 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 if (string.IsNullOrEmpty(rawName))
                 {
                     if (fallbackIndex > 1) baseName += $"_{fallbackIndex}";
+                    // Increment fallback index only if we are actually adding the node
+                    fallbackIndex++;
                 }
 
                 string finalName = baseName + ".fsb";
@@ -1010,7 +1018,6 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 }
 
                 usedNames.Add(finalName);
-                fallbackIndex++;
 
                 // Create nodes using the specific NodeData-derived classes.
                 TreeNode fsbNode = new TreeNode(finalName, ImageIndex.Folder, ImageIndex.Folder);
@@ -1018,18 +1025,17 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 root.Nodes.Add(fsbNode);
 
                 // Pass the progress reporter down to the next level of analysis.
-                // This call is intentionally not wrapped in its own progress report,
-                // as ParseFsbFromSource will provide its own detailed sub-progress.
                 ParseFsbFromSource(path, offset, fsbNode, progressReporter);
             }
         }
 
         /// <summary>
         /// Validates if the data at a given index within a buffer corresponds to a valid FSB5 header.
+        /// Filters out empty containers (0 samples) to avoid showing FADPCM artifacts.
         /// </summary>
         /// <param name="buffer">The byte array buffer containing the file chunk.</param>
         /// <param name="index">The starting index within the buffer where the potential header starts.</param>
-        /// <returns>true if the header is valid; otherwise, false.</returns>
+        /// <returns>true if the header is valid and has samples; otherwise, false.</returns>
         private bool IsValidFsbHeader(byte[] buffer, int index)
         {
             try
@@ -1043,8 +1049,8 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 // Header fields are read for logical validation.
                 int numSamples = BitConverter.ToInt32(buffer, index + 8);
 
-                // A negative sample count is a definitive sign of invalid data.
-                if (numSamples < 0)
+                // A negative or zero sample count indicates invalid or empty data (e.g., FADPCM padding chunks).
+                if (numSamples <= 0)
                 {
                     return false;
                 }
@@ -2701,35 +2707,37 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
         /// <summary>
         /// Handles the Click event of the extractContextMenuItem control.
+        /// Extracts a single audio item using SaveFileDialog for better UX.
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         private async void extractContextMenuItem_Click(object sender, EventArgs e)
         {
             var selectedNode = treeViewInfo.SelectedNode;
-            string finalDir = string.Empty; // Declare outside the try block for logging purposes.
-            LogWriter localLogger = null; // Use a local logger instance for this single operation.
+            string finalFilePath = string.Empty; // Store final path for logging.
+            LogWriter localLogger = null;
 
             try
             {
                 if (selectedNode?.Tag is AudioDataNode data)
                 {
-                    using (var fbd = new FolderBrowserDialog { Description = "Select a folder to extract the audio file into." })
+                    // Use SaveFileDialog to let the user specify filename and location directly.
+                    using (var sfd = new SaveFileDialog())
                     {
-                        if (fbd.ShowDialog() == DialogResult.OK)
-                        {
-                            // Construct the final output path.
-                            string baseOutputDir = fbd.SelectedPath;
-                            string subPath = GetExtractionSubPath(selectedNode);
-                            finalDir = Path.Combine(baseOutputDir, subPath);
-                            Directory.CreateDirectory(finalDir);
+                        sfd.Title = "Save Audio File";
+                        sfd.Filter = "WAV File|*.wav";
+                        sfd.FileName = SanitizeFileName(selectedNode.Text) + ".wav";
 
-                            string finalFilePath = Path.Combine(finalDir, SanitizeFileName(selectedNode.Text) + ".wav");
+                        if (sfd.ShowDialog() == DialogResult.OK)
+                        {
+                            finalFilePath = sfd.FileName;
+                            string outputDir = Path.GetDirectoryName(finalFilePath);
 
                             // Initialize the logger if verbose logging is enabled.
+                            // The log file will be saved in the same directory as the audio file.
                             if (chkVerboseLog.Checked)
                             {
-                                string logFile = Path.Combine(baseOutputDir, $"ExtractionLog_Single_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
+                                string logFile = Path.Combine(outputDir, $"ExtractionLog_Single_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
                                 localLogger = new LogWriter(logFile);
 
                                 // Write a detailed header for the single file extraction log.
@@ -2746,10 +2754,16 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                                 localLogger.WriteRaw("Timestamp\tLevel\tSourceFile\tEventName\tResult\tFormat\tLoopRange(ms)\tDataOffset\tDuration(ms)\tOutputPath\tTimeTaken(ms)");
                             }
 
+                            SetUiState(false); // Disable UI during extraction.
+                            lblStatus.Text = $"Extracting {Path.GetFileName(finalFilePath)}...";
+                            Application.DoEvents(); // Force UI update.
+
                             // Measure the extraction time.
                             Stopwatch sw = Stopwatch.StartNew();
+
                             // Extract the audio data to a .wav file.
                             long bytesWritten = await ExtractSingleWavAsync(data.CachedAudio, finalFilePath);
+
                             sw.Stop();
 
                             if (bytesWritten >= 0)
@@ -2763,11 +2777,15 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                                     string offsetInfo = $"0x{info.DataOffset:X}";
                                     localLogger.LogTSV(LogWriter.LogLevel.INFO, Path.GetFileName(info.SourcePath), info.Name, "OK", formatInfo, loopInfo, offsetInfo, info.LengthMs.ToString(), finalFilePath, sw.ElapsedMilliseconds.ToString());
                                 }
+
+                                SetUiState(true);
+                                lblStatus.Text = "Extraction Complete.";
                                 MessageBox.Show($"File successfully saved to:\n{finalFilePath}", "Extraction Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
                             }
                             else
                             {
-                                // This path is unlikely to be hit as errors throw exceptions, but is kept for robustness.
+                                SetUiState(true);
+                                lblStatus.Text = "Extraction Failed.";
                                 MessageBox.Show("Failed to extract audio file.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                             }
                         }
@@ -2776,8 +2794,11 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             }
             catch (Exception ex)
             {
+                SetUiState(true);
+                lblStatus.Text = "Error during extraction.";
+
                 // Handle the exception by logging it and notifying the user.
-                string context = $"Single file extraction of '{(selectedNode != null ? selectedNode.FullPath : "Unknown")}' to '{(string.IsNullOrEmpty(finalDir) ? "N/A" : finalDir)}'";
+                string context = $"Single file extraction of '{(selectedNode != null ? selectedNode.FullPath : "Unknown")}' to '{(string.IsNullOrEmpty(finalFilePath) ? "N/A" : finalFilePath)}'";
 
                 // Log to the local logger if it was created for this operation.
                 localLogger?.WriteRaw($"[ERROR] An exception occurred during extraction.");
@@ -2791,7 +2812,6 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                                      $"Technical details have been saved to the log file:\n{Path.GetFileName(logFilePath)}";
 
                 MessageBox.Show(this, userMessage, "Extraction Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                RestoreUiAfterError();
             }
             finally
             {
@@ -3975,10 +3995,8 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
         /// <summary>
         /// Gets the internal name of an FSB container.
+        /// Also validates if the sound has actual content (SubSounds > 0).
         /// </summary>
-        /// <param name="path">The path to the file containing the FSB.</param>
-        /// <param name="offset">The offset of the FSB data within the file.</param>
-        /// <returns>The internal name of the FSB.</returns>
         private string GetFsbInternalName(string path, uint offset)
         {
             string name = "";
@@ -3988,11 +4006,38 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 lock (_coreSystemLock)
                 {
                     CREATESOUNDEXINFO exinfo = new CREATESOUNDEXINFO { cbsize = Marshal.SizeOf(typeof(CREATESOUNDEXINFO)), fileoffset = offset };
+
+                    // OPENONLY | CREATESTREAM to read header without loading data
                     if (_coreSystem.createSound(path, MODE.OPENONLY | MODE.CREATESTREAM, ref exinfo, out sound) == RESULT.OK)
                     {
+                        // Check if the container actually contains any sounds.
+                        // FADPCM artifacts often appear as valid headers but contain 0 sub-sounds.
+                        sound.getNumSubSounds(out int numSubSounds);
+
+                        // If it has no sounds inside, it's garbage.
+                        if (numSubSounds <= 0)
+                        {
+                            return null;
+                        }
+
+                        // Double-check duration as well.
+                        sound.getLength(out uint length, TIMEUNIT.MS);
+                        if (length == 0)
+                        {
+                            return null;
+                        }
+
                         sound.getName(out name, 256);
                     }
+                    else
+                    {
+                        return null; // FMOD couldn't parse it, so ignore it.
+                    }
                 }
+            }
+            catch
+            {
+                return null;
             }
             finally { SafeRelease(ref sound); }
             return name;
