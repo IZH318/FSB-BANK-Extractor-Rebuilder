@@ -69,35 +69,40 @@ We will provide an update via this README if development on the CLI versions res
        -   Added a feature to **replace** specific audio within `.bank` or `.fsb` files with other user-provided audio files (WAV, MP3, OGG, etc.).
        -   Integrates with the official FMOD command-line tool `fsbankcl.exe` to stably generate FSB files that are perfectly compatible with the original.
        -   **Batch Rebuild:** Allows replacing multiple sounds at once through a data grid view.
-       -   **Auto-Matching:** By specifying a folder, the program automatically finds and matches audio files to be replaced by comparing them with internal sound names.
+       -   **Intelligent Auto-Matching (Auto-Match):**
+           -   **Exact Match:** Prioritizes finding and matching files within a specified folder where the filename exactly matches the internal sound name (e.g., `sound_01` -> `sound_01.wav`).
+           -   **Smart Match:** If no exact match is found, it performs a new search using the base name (excluding numeric suffixes) to suggest alternative files (e.g., matching `sound.wav` for `sound_01`, `sound_02`).
+           -   **User Confirmation Step:** After the search is complete, it presents a summary of the matched results, allowing the user to make a final selection on the scope of application, enhancing stability.
        -   **Real-time Validation:** **Compares the duration** of the replacement audio file with the original in real-time, displaying immediate warnings ([LONG], [SHORT]) in the UI if it's too long or short. It also warns about the potential for broken loops, enhancing stability.
        -   Introduces a **Binary Search algorithm** to automatically find the optimal compression quality that does not exceed the original file's data size.
    - **Real-time Audio Analyzer (Tools Menu):**
        - **Comprehensive Visualization:** Renders Waveform, Spectrum, Spectrogram, Vectorscope, and Oscilloscope in real-time.
        - **Precision Metering:** Provides channel-specific RMS/Peak metering, Clipping counters, and DC Offset.
        - **Loudness Analysis:** Measures LUFS and True Peak (dBTP) based on broadcasting standards like EBU R 128.
-   - **Mass File Management and Index Tools:** 
-       - Supports **Jump to Index** to instantly move to a specific audio file by its index number and **Select Range** (e.g., `100-200`) to select a large number of files at once, maximizing workflow efficiency.
+   - **Mass File Management and Index Tools (Index Tools):** 
+       - Supports **Jump to Index** to instantly move to a specific audio file by its index number among thousands, and **Select Indices** to select a large number of files at once by entering a range (`100-200`), maximizing workflow efficiency.
    - **Audio Preview System:** 
        - Instantly Play, Pause, and Stop audio within the program without needing to extract.
-       - Features a **Seek Bar**, **Volume Control**, and **Force Loop** options for precise audio data verification.
+       - Features a **Seek Bar**, **Volume Control**, and **Force Loop** playback options for precise audio data verification.
    - **Strings Bank Integration:** 
        - Automatically detects or allows **manual loading** of `.strings.bank` files to convert encrypted GUIDs (e.g., `{a1b2...}`) into developer-assigned **real event names**.
    - **Real-time Search and Advanced Navigation:** 
-       - Equipped with an optimized search engine to quickly filter and display only matching items.
+       - Equipped with an optimized search engine to quickly filter and display only matching items from thousands of audio nodes in a list format.
        - **Open File Location** in search results instantly navigates to the original location within the tree structure to identify the file's context.
    - **Integrated Details Panel:** 
-       - Displays metadata such as Format, Channels, Bitrate, Loop points, and GUID in the right panel when an item is clicked, eliminating the need for popup windows.
+       - Displays metadata such as Format (PCM, ADPCM, etc.), Channels, Bitrate, Loop points, GUID, and original path in the right panel when an item is clicked, eliminating the need for popup windows.
    - **Data Management and Export:** 
        - **CSV Export:** Export the structure and detailed properties of all currently loaded files to a CSV file.
        - **Checkbox-based Extraction:** Select specific items via checkboxes for batch extraction.
+       - **User-centric Extraction Methods:** While batch extraction preserves the folder structure, **single-file extraction now uses a 'Save As' dialog**, allowing users to specify the path and filename directly.
        - Flexible extraction path options: 'Same as original file', 'Custom fixed path', or 'Ask every time'.
    - **User Convenience & Workflow:**
-       - **Drag & Drop:** Easily load files and folders by dragging them into the program window.
-       - **Shortcuts:** Full support for shortcuts like Open File (`Ctrl+O`), Search (`Ctrl+F`), and Extract (`Ctrl+E`).
-   - **Performance Optimization & Architecture Improvement:** 
+       - **Drag & Drop Support:** Easily load files and folders by dragging them from Explorer into the program window.
+       - **Shortcut Support:** Full support for shortcuts like Open File (`Ctrl+O`), Search (`Ctrl+F`), and Extract (`Ctrl+E`).
+   - **Performance Optimization & Stability Enhancement:** 
        -   **Parallel Scanning & Async Processing:** Fully adopted `Parallel.ForEach` and `async/await` to analyze large quantities of files/folders at high speed without UI freezing.
        -   **Granular Progress Display:** Improved from showing only overall progress to displaying **detailed progress for each file** (e.g., `Parsing FSB chunk 3/5`), enhancing responsiveness during large tasks.
+       -   **Enhanced FSB Analysis Logic:** Filters out 'ghost' FSB chunks (often padding data in FADPCM) that are technically valid but have no content during the analysis phase, improving stability by preventing unnecessary items from appearing in the UI.
        -   **Low-level Binary Parsing:** Directly analyzes FSB headers to obtain more accurate audio data information for certain compression formats and reduce parsing errors.
        -   **Flexible Architecture Support (AnyCPU):** Changed from the previous x86 build to **AnyCPU**, allowing native execution on both 32-bit and 64-bit operating systems. The program's operating mode (32-bit/64-bit) is automatically determined by the architecture of the FMOD libraries (e.g., fmod.dll) copied by the user into the application folder.
 
@@ -105,7 +110,35 @@ We will provide an update via this README if development on the CLI versions res
 
 ## 🔄 Update History
 
-### v3.1.0 (2025-12-12) (GUI Only)
+### v3.2.0 (2025-12-13) (GUI Only)
+This update focuses on significantly enhancing the **convenience of the rebuild system** and the **stability of the analysis logic**. **(No changes to CLI versions)**
+
+-   #### **✨ New Features & Major Improvements**
+    -   **Intelligent Auto-Match Feature Added:**
+        -   The `Auto-Match` function in the Rebuild Manager has been completely redesigned to perform a **two-stage intelligent search**, going beyond simple name comparison.
+        -   **Stage 1 (Exact Match):** Prioritizes matching cases where the internal sound name and the filename are an exact match (e.g., `sound_01` -> `sound_01.wav`).
+        -   **Stage 2 (Smart Match):** If no match is found in stage 1, it performs a new search using the base name (excluding numeric suffixes) to suggest alternative files (e.g., attempts to match `sound.wav` for `sound_01`, `sound_02`).
+        -   **User Confirmation Step:** After the search is complete, it presents a summary of the matched results, allowing the user to make a final selection on the scope of application, preventing unintentional file replacements.
+    -   **User-centric Single-File Extraction Method Introduced:**
+        -   The process has been changed from selecting a folder and having files automatically generated to using a **'Save As' dialog (SaveFileDialog)**.
+        -   This allows the user to **directly specify the name and save location** for the extracted file, making the workflow much more intuitive and flexible.
+
+-   #### **🚀 Performance & User Experience (UX) Improvements**
+    -   **Enhanced FSB Analysis Logic:**
+        -   **Automatically filters out 'ghost' FSB chunks** (often padding data in the FADPCM format) that have a technically valid header but no actual audio data during the analysis phase.
+        -   This prevents empty or unnecessary items from appearing in the UI, reducing user confusion and improving analysis accuracy.
+    -   **Rebuild Manager Progress Feedback:** When using the `Auto-Match` feature, the progress of the file search and application process is now displayed in real-time on the form's title bar (`Scanning... (X%)`), improving responsiveness during large-scale tasks.
+    -   **Help Content Overhaul:** The help documentation (F1) has been completely rewritten to include descriptions and examples for the latest features, such as the detailed logic of `Auto-Match`, the `Force Loop` option, and the changes to the single-file extraction method.
+
+<BR>
+
+<details>
+<summary>📜 Previous Updates - Click to Expand</summary>
+<BR>
+
+<details>
+<summary>v3.1.0 (2025-12-12) - GUI Only</summary>
+   
 This update focuses on overhauling the existing rebuild system to support **batch processing** and improving the user experience (UX) during long tasks. **(No changes to CLI versions)**
 
 -   #### **✨ New Features & Major Improvements**
@@ -125,12 +158,7 @@ This update focuses on overhauling the existing rebuild system to support **batc
     -   **Simplified Timer Logic:** Consolidated the timers for UI updates and FMOD engine processing into one, reducing complex inter-thread calls and improving code stability.
     -   **Code Refactoring:** Refactored the internal code of several classes, including `AudioAnalyzerForm` and `IndexToolForm`, to improve readability and maintainability.
     -   **Improved Log System Flexibility:** Enhanced the internal structure of the `LogWriter` class to make it easier to record logs in various formats.
-
-<BR>
-
-<details>
-<summary>📜 Previous Updates - Click to Expand</summary>
-<BR>
+</details>
 
 <details>
 <summary>v3.0.0 (2025-12-09) - GUI Only</summary>
@@ -429,10 +457,10 @@ Users must manually obtain and place the `dll` and `exe` files listed below.
 
    - **Navigation and Preview**:
       - **Structure Explorer**: Check the internal actual hierarchy (Events, Buses, Audio) of the Bank in the left Tree View.
-      - **Search Filter**: Enter text in the top **Search** bar to filter the list and show only matching items. Right-clicking an item in the search results and selecting **`Open File Location`** moves to the original location in the Tree View, and allows for **immediate extraction or rebuilding**.
-      - **Index Tools**: Right-click an FSB/Bank node and run **`Index Tools...`** to jump to a specific index number (`Jump to Index`) or check multiple items at once by specifying a range (`Select Range`, e.g., `100-200, 305`).
+      - **Search Filter**: Enter text in the top **`Search`** bar to filter the list and show only matching items. Right-clicking an item in the search results and selecting **`Open File Location`** moves to the original location in the Tree View, and allows for **immediate extraction or rebuilding**.
+      - **Index Tools**: Right-click an FSB/Bank node and run **`Index Tools...`** to jump to a specific index number (`Jump to Index`) or check multiple items at once by specifying a range (`Select Indices`, e.g., `100-200, 305`).
       - **Details**: Click an item to view real-time information such as format, channels, and loop points in the right **Details** panel.
-      - **Audio Playback**: Use the `Play(▶)`, `Stop(■)` buttons, seek bar, volume slider, and `Loop` checkbox in the bottom panel to verify sounds before extraction. If `Auto-Play` is checked, audio plays automatically upon selection.
+      - **Audio Playback**: Use the `Play(▶)`, `Stop(■)` buttons, seek bar, volume slider, and `Force Loop` checkbox in the bottom panel to verify sounds before extraction. If `Auto-Play` is checked, audio plays automatically upon selection.
       - **Data Copy**: **Right-click** items in the Tree View or Search Results to easily copy the Name (`Copy Name`), Full Path (`Copy Path`), or GUID (`Copy GUID`) to the clipboard.
       - **Tree View Control**: Right-click anywhere and use **`Expand All`** or **`Collapse All`** to open or close all folders at once. <BR> <BR>
    
@@ -441,15 +469,19 @@ Users must manually obtain and place the `dll` and `exe` files listed below.
       - **Open Rebuild Manager**: **Right-click** the audio file you want to replace, or the FSB/Bank container holding multiple audio files, and select the **`Rebuild Manager...`** menu.
       - **Replace Files and Specify Options**:
          - **Manual Replacement:** Click the `Edit` button for each item to individually select the replacement audio file (WAV, MP3, etc.).
-         - **Auto-Matching:** Use the **`Auto-Match from Folder`** button in `Batch Tools` to automatically find and replace files within a specified folder that match by name.
+         - **Intelligent Auto-Matching:** Click the **`Auto-Match from Folder`** button in `Batch Tools`. When you specify a folder, the program performs a **two-stage search (Exact Matches, Smart Matches)** to find and suggest matching files for replacement all at once.
          - Select the **compression format** (Vorbis, FADPCM, PCM) and press the **`START BUILD`** button.
       - **Auto-Optimization (Vorbis Only)**: The program **automatically optimizes** the compression quality to fit within the original file's data size, ensuring the audio is replaced safely without corrupting the file structure, and saves it as a new file.
       - **Real-time Validation**: If the length of a replacement file differs from the original, the Status column ([LONG], [SHORT]) and the top warning panel will immediately notify you of potential issues. <BR> <BR>
 
    - **File Extraction**:
-      - **Set Extraction Path**: In the combo box at the bottom right of the main screen, select the default save location for extracted files: 'Same as source file', 'Custom path', or 'Ask every time'.
-      - **Selective Extraction**: Check the **checkboxes** for the desired items in the **Structure Explorer** (Tree View) or the **Search Result List**. Then click **`File` > `Extract Checked...`** and specify a folder to save to. (Shortcut: `Ctrl + E`)
-      - **Extract All**: Click **`File` > `Extract All...`** to extract all currently loaded items at once. (Shortcut: `Ctrl + Shift + E`) <BR> <BR>
+      - **Batch Extraction**:
+        - **Set Extraction Path**: In the combo box at the bottom right of the main screen, select the default save location for extracted files: 'Same as source file', 'Custom path', or 'Ask every time'.
+        - **Selective Extraction**: Check the **checkboxes** for the desired items in the **Structure Explorer** (Tree View) or the **Search Result List**. Then click **`File` > `Extract Checked...`** and specify a folder to save to. (Shortcut: `Ctrl + E`)
+        - **Extract All**: Click **`File` > `Extract All...`** to extract all currently loaded items at once. (Shortcut: `Ctrl + Shift + E`)
+      - **Single Extraction**:
+        - **Right-click** the specific audio item you want to extract and select the **`Extract This Item...`** menu.
+        - When the **'Save As'** dialog appears, you can specify your desired location and filename to save the file. <BR> <BR>
 
    - **Analysis Tools & Other Options**:
       - **Real-time Audio Analyzer**:
@@ -457,7 +489,7 @@ Users must manually obtain and place the `dll` and `exe` files listed below.
          - Click **`Tools` > `Audio Analyzer...`** in the top menu to open the analysis window. You can check professional data such as Waveform, FFT Spectrum, **LUFS**, and **True Peak (dBTP)** in real-time during playback.
       - **CSV Export**: Save the file list as an Excel-compatible file via **`File` > `Export List to CSV...`**. (Shortcut: `Ctrl + Shift + C`)
       - **Verbose Logging**: Enable the **`Verbose Log`** checkbox at the bottom to save detailed logs of the extraction or rebuild process to a file.
-      - **Help & Info**: Check the full feature description via **`File` > `Help`** (or `F1`), and view version info in **`File` > `About`**. <BR>
+      - **Help & Info**: Check the full feature description and version information via the **`Help`** (F1) or **`About`** menus. <BR>
 
 <BR>
 
@@ -505,3 +537,4 @@ Users must manually obtain and place the `dll` and `exe` files listed below.
     -   Suggested the core principle of the Rebuild feature for replacing audio data. The idea that "the replacement sound must be the same size or smaller than the original, and replaced at the binary level while maintaining the original index" provided the decisive basis for implementing the current stable Rebuild system.
 -   **[ValtteriB77](https://github.com/ValtteriB77)**
     -   Shared a real-world modding case requiring the replacement of hundreds of files at once, highlighting the inefficiency of the single-file replacement method and suggesting the need for a batch rebuild feature. This feedback was a key motivation for implementing the current `Rebuild Manager`.
+    -   Provided in-depth feedback on the completed `Auto-Match` feature based on a modding case for 'AC Rally'. They suggested the need for more advanced matching logic beyond simple name comparison, such as the ability to replace multiple versions of a sound (`_1`, `_2`, etc.) with a single file or to flexibly find files by matching only part of a name. This proposal has become a crucial roadmap for intelligently enhancing the `Auto-Match` feature in the future.
