@@ -94,9 +94,8 @@ B. [리빌드 기능용] - FMOD Engine 설치 폴더의 'bin' 경로에서 복�
   - Copyright © Firelight Technologies Pty Ltd.
 
 - 아이콘 출처:
-  - 이름: Unboxing icons
-  - 제작자: Graphix's Art
-  - 제공처: Flaticon (https://www.flaticon.com/free-icons/unboxing)
+  - 생성 모델: Gemini 2.5 Flash Image
+  - 플랫폼: Google AI Studio
 
 
 
@@ -192,6 +191,5 @@ B. [For Rebuilding Feature] - Copy from the 'bin' path in your FMOD Engine folde
   - Copyright © Firelight Technologies Pty Ltd.
 
 - Icon Credits:
-  - Name: Unboxing icons
-  - Author: Graphix's Art
-  - Source: Flaticon (https://www.flaticon.com/free-icons/unboxing)
+  - Generation Model: Gemini 2.5 Flash Image
+  - Platform: Google AI Studio
