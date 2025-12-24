@@ -1,10 +1,17 @@
 # FSB/BANK Extractor & Rebuilder
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Windows-7%2B-0078D6.svg?style=flat-square&logo=windows&logoColor=white" alt="OS: Windows 7+">
+  <img src="https://img.shields.io/badge/.NET%20Framework-4.8-512BD4.svg?style=flat-square&logo=dotnet&logoColor=white" alt=".NET Framework 4.8">
+  <img src="https://img.shields.io/badge/License-GPL%20v3-blue.svg?style=flat-square" alt="License: GPL v3">
+  <img src="https://img.shields.io/badge/Powered%20by-FMOD-000000.svg?style=flat-square&logo=fmod&logoColor=white" alt="Powered by FMOD">
+</p> <BR>
+
 <div align="center">
 
 | CLI Version (v1.x) | GUI Version (v3.x) |
 | :---: | :---: |
-| <img width="400" alt="CLI Screenshot" src="https://github.com/user-attachments/assets/a6eca308-23af-4068-ac3a-75543cc6411f"> | <img width="400" alt="GUI Screenshot" src="https://github.com/user-attachments/assets/6b1affa3-e0e6-4234-8154-e6dcbd313405"> |
+| <img width="400" alt="CLI Screenshot" src="https://github.com/user-attachments/assets/a6eca308-23af-4068-ac3a-75543cc6411f"> | <img width="400" alt="GUI Screenshot" src="https://github.com/user-attachments/assets/9c59c5de-16d5-4200-8225-c0706417b5e3"> |
 
 </div>
 
@@ -75,10 +82,11 @@ We will provide an update via this README if development on the CLI versions res
            -   **User Confirmation Step:** After the search is complete, it presents a summary of the matched results, allowing the user to make a final selection on the scope of application, enhancing stability.
        -   **Real-time Validation:** **Compares the duration** of the replacement audio file with the original in real-time, displaying immediate warnings ([LONG], [SHORT]) in the UI if it's too long or short. It also warns about the potential for broken loops, enhancing stability.
        -   Introduces a **Binary Search algorithm** to automatically find the optimal compression quality that does not exceed the original file's data size.
+       -   **Process Lifecycle Management:** Strengthened management logic to strictly track the execution status of external build tools, ensuring no **zombie processes** are left in the background upon task interruption or forced termination.
    - **Real-time Audio Analyzer (Tools Menu):**
-       - **Comprehensive Visualization:** Renders Waveform, Spectrum, Spectrogram, Vectorscope, and Oscilloscope in real-time.
+       - **Comprehensive Visualization:** Renders Waveform, Spectrum, Spectrogram, Vectorscope, and Oscilloscope in real-time. Applied **Double Buffering** technology to eliminate screen flickering.
        - **Precision Metering:** Provides channel-specific RMS/Peak metering, Clipping counters, and DC Offset.
-       - **Loudness Analysis:** Measures LUFS and True Peak (dBTP) based on broadcasting standards like EBU R 128.
+       - **Loudness Analysis:** Measures LUFS and True Peak (dBTP) based on broadcasting standards like EBU R 128, with measurements automatically resetting upon volume changes to ensure data integrity.
    - **Mass File Management and Index Tools (Index Tools):** 
        - Supports **Jump to Index** to instantly move to a specific audio file by its index number among thousands, and **Select Indices** to select a large number of files at once by entering a range (`100-200`), maximizing workflow efficiency.
    - **Audio Preview System:** 
@@ -88,18 +96,27 @@ We will provide an update via this README if development on the CLI versions res
        - Automatically detects or allows **manual loading** of `.strings.bank` files to convert encrypted GUIDs (e.g., `{a1b2...}`) into developer-assigned **real event names**.
    - **Real-time Search and Advanced Navigation:** 
        - Equipped with an optimized search engine to quickly filter and display only matching items from thousands of audio nodes in a list format.
+       - Applies **Debouncing technology** to perform searches only when the user stops typing, reducing unnecessary computations and ensuring a smooth response speed even with large amounts of data.
        - **Open File Location** in search results instantly navigates to the original location within the tree structure to identify the file's context.
    - **Integrated Details Panel:** 
-       - Displays metadata such as Format (PCM, ADPCM, etc.), Channels, Bitrate, Loop points, GUID, and original path in the right panel when an item is clicked, eliminating the need for popup windows.
+       - Displays detailed audio metadata in the right panel upon selection, eliminating the need for popup windows.
+       - **Expanded Information Display:** In addition to basic format, channel, and bitrate information, it now analyzes and displays in-depth FMOD internal data such as **3D Sound settings (Min/Max distance, cone angle), Music Channel properties, Metadata Tags, and Sync Points**.
    - **Data Management and Export:** 
-       - **CSV Export:** Export the structure and detailed properties of all currently loaded files to a CSV file.
+       - **CSV Export:** Export the structure and detailed properties of all currently loaded files to a CSV file (including extended metadata like 3D settings, tags, etc.).
        - **Checkbox-based Extraction:** Select specific items via checkboxes for batch extraction.
        - **User-centric Extraction Methods:** While batch extraction preserves the folder structure, **single-file extraction now uses a 'Save As' dialog**, allowing users to specify the path and filename directly.
        - Flexible extraction path options: 'Same as original file', 'Custom fixed path', or 'Ask every time'.
+       - **Improved Log Files:** The headers of extraction and rebuild log files have been improved to record detailed system and work environment information.
    - **User Convenience & Workflow:**
        - **Drag & Drop Support:** Easily load files and folders by dragging them from Explorer into the program window.
        - **Shortcut Support:** Full support for shortcuts like Open File (`Ctrl+O`), Search (`Ctrl+F`), and Extract (`Ctrl+E`).
+       - **High DPI Support:** Improved the UI to render sharply without blurring on high-resolution monitors.
    - **Performance Optimization & Stability Enhancement:** 
+       -   **Large File Streaming:** To resolve Out-Of-Memory (OOM) issues when processing multi-gigabyte `.bank` files, the I/O engine has been completely replaced to read and write using a **streaming** method instead of loading the entire file into memory.
+       -   **Legacy Format (FSB3/4) Support:** For older files (FSB3, FSB4) that are not properly recognized by the latest FMOD API, a **hybrid parsing engine** that directly analyzes the binary header has been implemented. This enables not only proper structure analysis but also playback and extraction.
+       -   **Enhanced FMOD Thread Safety:** Advanced the synchronization locking (Lock) mechanism for FMOD API calls to prevent conflicts between the UI thread and background tasks.
+       -   **Advanced Temporary File Cleanup (Non-blocking Cleanup):** When cleaning up leftover temp files at startup, an asynchronous deletion method using a background process is now applied. This prevents execution delays or errors caused by file lock issues.
+       -   **Memory Leak Prevention:** Strengthened garbage collection (GC) optimization and resource release logic to prevent memory accumulation during repetitive tasks.
        -   **Parallel Scanning & Async Processing:** Fully adopted `Parallel.ForEach` and `async/await` to analyze large quantities of files/folders at high speed without UI freezing.
        -   **Granular Progress Display:** Improved from showing only overall progress to displaying **detailed progress for each file** (e.g., `Parsing FSB chunk 3/5`), enhancing responsiveness during large tasks.
        -   **Enhanced FSB Analysis Logic:** Filters out 'ghost' FSB chunks (often padding data in FADPCM) that are technically valid but have no content during the analysis phase, improving stability by preventing unnecessary items from appearing in the UI.
@@ -110,8 +127,49 @@ We will provide an update via this README if development on the CLI versions res
 
 ## 🔄 Update History
 
-### v3.2.0 (2025-12-13) (GUI Only)
-This update focuses on significantly enhancing the **convenience of the rebuild system** and the **stability of the analysis logic**. **(No changes to CLI versions)**
+### v3.3.0 (2025-12-24) (GUI Only)
+This update focuses on pushing **system stability** and **large-file processing performance** to their limits. The internal architecture has been completely redesigned to ensure stable operation without out-of-memory errors, even when working with multi-gigabyte files. **(No changes to CLI versions)**
+
+-   #### **🏗️ Core Architecture Improvements (Major Refactoring)**
+    -   **Introduction of Service-Oriented Architecture (SOA):** The previous monolithic code structure has been modularized by role—such as FMOD control, file loading, extraction services, and rebuild services—dramatically improving code stability and maintainability.
+    -   **Complete Overhaul of the Streaming I/O Engine:** To fundamentally prevent Out-Of-Memory (OOM) issues when processing large `.bank` files, the method of loading entire files into memory has been replaced with a **streaming** approach for reading and writing.
+    -   **Enhanced Process Lifecycle Management:** When executing external build tools (`fsbankcl.exe`), the process state is now strictly tracked, and a forced cleanup logic has been added to ensure no **zombie processes** are left in the background upon task interruption or forced termination.
+
+-   #### **📊 Performance Benchmark (v3.2.0 vs v3.3.0)**
+    -   In a test processing a large container with 38,736 files, **memory usage was reduced by over 95%**, and **task speed nearly doubled**. (Note: Results are based on the test environment and may vary depending on the user's PC specifications and environment.)
+
+        | Category | Item | v3.2.0 | v3.3.0 | Improvement & Analysis |
+        | :--- | :--- | :---: | :---: | :--- |
+        | **System Resources** | **RAM Usage (Peak)** | 6.2 GB | **278 MB** | **95.5% Reduction in Memory Usage** |
+        | **Preparation** | Extraction (38,736 files) | 46m 58s | **18m 36s** | **2.52x Faster Processing Speed** |
+        | **Build Phase** | Avg. Time per Build | 2m 30s | **2m 12s** | 12.0% Reduction in Build Time |
+        | **Optimization** | Total Optimization Time | 20m 03s | **17m 53s** | 10.8% Reduction due to Process Efficiency |
+        | **Overall** | **Total Time** | 1h 07m 10s | **37m 10s** | **44.7% Reduction in Total Work Time** |
+
+-   #### **🚀 Feature Enhancements & Optimizations**
+    -   **Legacy Format (FSB3/4) Support:** For older files (FSB3, FSB4) that are not properly recognized by the latest FMOD API, a **hybrid parsing engine** that directly analyzes the binary header has been implemented. It automatically switches to manual analysis mode if API loading fails, recovering data and enabling **not only structure analysis but also proper playback and extraction for FSB3/4 files**.
+    -   **Enhanced Details Panel (Metadata):** Improved to display not only basic audio properties but also in-depth FMOD internal metadata, such as **3D Sound settings (Min/Max distance, cone angle), Music Channel properties, Metadata Tags, and Sync Points**.
+    -   **Expanded Data Export:**
+        -   **Revamped Log File Header:** The header of extraction and rebuild log files now automatically records system information (OS, CPU cores) and work environment details, improving ease of troubleshooting.
+        -   **Added CSV Data Fields:** When exporting to CSV, columns for the extended metadata mentioned above (3D settings, tags, etc.), as well as **PCM data length and frequency (Hz)**, are now included, enabling more precise data analysis.
+    -   **Improved Optimization Search Logic:** The logic was improved to reuse successfully built files from the binary search process as the final output, eliminating unnecessary rebuild steps.
+    -   **Memory Leak Prevention and Optimization:** Addressed an issue where memory would accumulate when repeatedly opening and closing the Rebuild Manager window. The logic was modified to explicitly release resources and trigger garbage collection (GC) when the window is closed.
+    -   **Resolved Real-time Analyzer Screen Flickering:** To eliminate the screen flickering that occurred when drawing real-time analysis graphs (waveform, spectrum, etc.), **Double Buffering** was forcibly enabled on the panel.
+    -   **High DPI Display Support:** Improved UI rendering to be sharp and clear on high-resolution displays, adapting to Windows display scaling settings.
+    -   **Implemented Intelligent Audio Extraction Method:** By default, a high-speed streaming method is used for extraction. However, if a special format incompatible with streaming is detected, it automatically switches to a memory-based decoding method, ensuring both speed and compatibility.
+    -   **Asynchronous Temporary File Deletion:** Instead of a simple deletion method, the program now uses a background command to clean up leftover temporary files at startup. This completely prevents program launch delays or errors caused by file lock issues.
+    -   **Enhanced Multithreading Stability:** Significantly improved the internal engine's synchronization logic to prevent potential conflicts when background tasks (extraction, rebuild) run concurrently while maintaining UI responsiveness.
+    -   **Icon Renewal:** The program's icon has been newly created using Google AI Studio's Gemini 2.5 Flash Image model.
+
+<BR>
+
+<details>
+<summary>📜 Previous Updates - Click to Expand</summary>
+<BR>
+
+<details>
+<summary>v3.2.0 (2025-12-13) - GUI Only</summary>
+This update focuses on significantly enhancing the <b>convenience of the rebuild system</b> and the <b>stability of the analysis logic</b>. <b>(No changes to CLI versions)</b>
 
 -   #### **✨ New Features & Major Improvements**
     -   **Intelligent Auto-Match Feature Added:**
@@ -129,12 +187,7 @@ This update focuses on significantly enhancing the **convenience of the rebuild 
         -   This prevents empty or unnecessary items from appearing in the UI, reducing user confusion and improving analysis accuracy.
     -   **Rebuild Manager Progress Feedback:** When using the `Auto-Match` feature, the progress of the file search and application process is now displayed in real-time on the form's title bar (`Scanning... (X%)`), improving responsiveness during large-scale tasks.
     -   **Help Content Overhaul:** The help documentation (F1) has been completely rewritten to include descriptions and examples for the latest features, such as the detailed logic of `Auto-Match`, the `Force Loop` option, and the changes to the single-file extraction method.
-
-<BR>
-
-<details>
-<summary>📜 Previous Updates - Click to Expand</summary>
-<BR>
+</details>
 
 <details>
 <summary>v3.1.0 (2025-12-12) - GUI Only</summary>
@@ -312,16 +365,11 @@ FSB_BANK_Extractor_Rebuilder_CS_GUI/
 ├─ App.config
 ├─ packages.config
 │
-├─ FSB_BANK_Extractor_CS_GUI.csproj
-├─ FSB_BANK_Extractor_CS_GUI.cs
-├─ AudioAnalyzerForm.cs
-├─ HelpForm.cs
-├─ IndexToolForm.cs
-├─ RebuildOptionsForm.cs
-├─ Program.cs
+├─ # Project Code Folder
+├─ src
 │
+├─ 02fb9213-26ba-4ab3-83ed-a31c0ca34a49 (Edit).ico
 ├─ FMOD_LICENSE.TXT
-├─ unboxing_Edit.ico
 │
 ├─ # FMOD C# Wrapper Files (Copy Required)
 ├─ fmod.cs
@@ -444,7 +492,7 @@ Users must manually obtain and place the `dll` and `exe` files listed below.
 
 **[ ===== FSB_BANK_Extractor_CS_GUI (C# GUI Version) ===== ]**
 
-<img width="786" height="593" src="https://github.com/user-attachments/assets/6b1affa3-e0e6-4234-8154-e6dcbd313405" /> <BR> <BR>
+<img width="786" height="593" src="https://github.com/user-attachments/assets/9c59c5de-16d5-4200-8225-c0706417b5e3" /> <BR> <BR>
 
 **1. Run the `FSB_BANK_Extractor_CS_GUI.exe` file.** <BR> <BR>
 
@@ -465,7 +513,7 @@ Users must manually obtain and place the `dll` and `exe` files listed below.
       - **Tree View Control**: Right-click anywhere and use **`Expand All`** or **`Collapse All`** to open or close all folders at once. <BR> <BR>
    
    - **Audio Rebuild (Replace)**:
-      - <img width="706" height="513" alt="image" src="https://github.com/user-attachments/assets/2e66f550-784a-4f0a-827d-7d0cc745d07a" />
+      - <img width="706" height="513" alt="image" src="https://github.com/user-attachments/assets/8dc12705-edf4-422e-9481-8fde6862e22b" />
       - **Open Rebuild Manager**: **Right-click** the audio file you want to replace, or the FSB/Bank container holding multiple audio files, and select the **`Rebuild Manager...`** menu.
       - **Replace Files and Specify Options**:
          - **Manual Replacement:** Click the `Edit` button for each item to individually select the replacement audio file (WAV, MP3, etc.).
@@ -485,7 +533,7 @@ Users must manually obtain and place the `dll` and `exe` files listed below.
 
    - **Analysis Tools & Other Options**:
       - **Real-time Audio Analyzer**:
-         - <img width="706" height="513" alt="image" src="https://github.com/user-attachments/assets/b17f9845-60f5-46ec-ba9c-f0e41239b235" />
+         - <img width="706" height="513" alt="image" src="https://github.com/user-attachments/assets/4babe119-b563-41a8-a603-2657c9d3eeef" />
          - Click **`Tools` > `Audio Analyzer...`** in the top menu to open the analysis window. You can check professional data such as Waveform, FFT Spectrum, **LUFS**, and **True Peak (dBTP)** in real-time during playback.
       - **CSV Export**: Save the file list as an Excel-compatible file via **`File` > `Export List to CSV...`**. (Shortcut: `Ctrl + Shift + C`)
       - **Verbose Logging**: Enable the **`Verbose Log`** checkbox at the bottom to save detailed logs of the extraction or rebuild process to a file.
@@ -513,10 +561,8 @@ Users must manually obtain and place the `dll` and `exe` files listed below.
 
 - **Icons Used in This Project:**
 
-  - **Icon Name:** Unboxing icons
-   - **Creator:** Graphix's Art
-   - **Source:** Flaticon
-   - **URL:** https://www.flaticon.com/free-icons/unboxing <BR> <BR>
+   - **Generation Model:** Gemini 2.5 Flash Image
+   - **Platform:** Google AI Studio <BR> <BR>
 
 - **Project Code License**
 
@@ -528,6 +574,8 @@ Users must manually obtain and place the `dll` and `exe` files listed below.
 
 -   **[FMOD FSB files extractor (through their API)](https://zenhax.com/viewtopic.php@t=1901.html)**
     -   The `fsb_aud_extr.exe` created by **id-daemon** on the zenhax.com forum was a crucial reference that provided the core idea for this tool.
+-   **[fsbext by Luigi Auriemma](http://aluigi.altervista.org/)** ([GitHub Mirror](https://github.com/gdawg/fsbext))
+    -   The Legacy FSB format (FSB3/4) parsing and fallback decoding logic used in this project was re-implemented in C# by referencing the source code of `fsbext` v0.3.5 by **Luigi Auriemma**.
 -   **[Redelax](https://github.com/Redelax)**
     -   Reported the issue where data was overwritten and lost when filenames were duplicated. Thanks to this, we were able to improve the program to be more stable.
 -   **[TigerShota](https://github.com/TigerShota)**
