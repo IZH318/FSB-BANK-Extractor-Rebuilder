@@ -494,11 +494,11 @@ Users must manually obtain and place the `dll` and `exe` files listed below.
 
    - `<audio_file_path>`: **Required**, Enter the path of the FSB or Bank file to process. <BR>
      You must enter the **path to the FSB or Bank file**. <BR>
-     (* Example: `C:\sounds\music.fsb` or `audio.bank` *) <BR> <BR>
+     (Example: `C:\sounds\music.fsb` or `audio.bank`) <BR> <BR>
 
    - `[Options]`: **Optional**, You can selectively use the following options as needed. Each option is added after `<audio_file_path>`, separated by spaces. <BR>
      - `-res`: **Saves WAV files in the same folder as the FSB/Bank file.** (Default option; behaves like `-res` if omitted) <BR>
-       **Usage Example**: `program.exe audio.fsb -res` (* `-res` can be omitted, same as `program.exe audio.fsb` *) <BR>
+       **Usage Example**: `program.exe audio.fsb -res` (`-res` can be omitted, same as `program.exe audio.fsb`) <BR>
 
      - `-exe`: **Saves WAV files in the same folder as the program executable.** <BR>
        **Usage Example**: `program.exe sounds.fsb -exe` <BR>
