@@ -113,6 +113,9 @@ We will provide an update via this README if development on the CLI versions res
        - **High DPI Support:** Improved the UI to render sharply without blurring on high-resolution monitors.
    - **Performance Optimization & Stability Enhancement:** 
        -   **Large File Streaming:** To resolve Out-Of-Memory (OOM) issues when processing multi-gigabyte `.bank` files, the I/O engine has been completely replaced to read and write using a **streaming** method instead of loading the entire file into memory.
+       -   **Improved File Access Structure (Caching):** By keeping file handles open in memory after analysis, the program skips the redundant process of re-reading files for subsequent operations like playback or extraction. This enables instant playback without stuttering, even in large `.bank` files containing thousands of audio assets, and reduces unnecessary disk I/O.
+       -   **Improved Batch Extraction Method:** The previous method of opening and closing a container for each extracted file has been replaced. Now, files belonging to the same container are processed in a single batch. Since the container is opened only once to extract all internal sounds consecutively, the extraction speed for a large number of files has been significantly increased.
+       -   **Large File Streaming:** To resolve Out-Of-Memory (OOM) issues when processing multi-gigabyte `.bank` files, the I/O engine has been completely replaced to read and write using a **streaming** method instead of loading the entire file into memory.
        -   **Legacy Format (FSB3/4) Support:** For older files (FSB3, FSB4) that are not properly recognized by the latest FMOD API, a **hybrid parsing engine** that directly analyzes the binary header has been implemented. This enables not only proper structure analysis but also playback and extraction.
        -   **Enhanced FMOD Thread Safety:** Advanced the synchronization locking (Lock) mechanism for FMOD API calls to prevent conflicts between the UI thread and background tasks.
        -   **Advanced Temporary File Cleanup (Non-blocking Cleanup):** When cleaning up leftover temp files at startup, an asynchronous deletion method using a background process is now applied. This prevents execution delays or errors caused by file lock issues.
@@ -127,7 +130,35 @@ We will provide an update via this README if development on the CLI versions res
 
 ## 🔄 Update History
 
-### v3.3.0 (2025-12-24) (GUI Only)
+### v3.3.1 (2025-12-30) - GUI Only
+This update focuses on improving **perceived performance** and **responsiveness**. A **caching system** has been introduced to the internal engine to eliminate delays when handling large files. **(No changes to CLI versions)**
+
+-   #### **⚡ Performance Optimization**
+    -   **Improved File Access Structure (Caching):**
+        -   By keeping the connection handle open in memory after analyzing a file, the program **skips the re-reading process** for subsequent playback or extraction requests.
+        -   This allows for **instant playback** without stuttering, even in large `.bank` files with thousands of audio tracks, and reduces unnecessary disk read operations.
+    -   **Improved Batch Extraction Method:**
+        -   The previous method of opening and closing the container for each file extraction has been replaced. Now, **files belonging to the same container are processed in a single batch**.
+        -   Since the container is opened only once to extract all internal sounds consecutively, the extraction speed for a large number of files has been significantly increased.
+
+-   #### **🖱️ User Experience & Stability**
+    -   **Enhanced Auto-Play and Engine Stability:**
+        -   Fixed an issue where audio would not play correctly when rapidly clicking items with the `Auto-Play` option enabled.
+        -   **Debounce handling** has been implemented to filter unnecessary playback requests, and internal resource cleanup timing has been optimized to fundamentally prevent errors during consecutive playback.
+
+-   #### **🛠️ Code Quality Enhancement**
+    -   **Comprehensive Refactoring of Constants:** Scattered messages and configuration values throughout the program have been centralized into separate internal classes, improving management efficiency.
+    -   **Applied Defensive Coding:** Strengthened exception handling for potential issues during the execution and termination phases of key features, making the program more robust.
+
+<BR>
+
+<details>
+<summary>📜 Previous Updates - Click to Expand</summary>
+<BR>
+
+<details>
+<summary>v3.3.0 (2025-12-24) - GUI Only</summary>
+  
 This update focuses on pushing **system stability** and **large-file processing performance** to their limits. The internal architecture has been completely redesigned to ensure stable operation without out-of-memory errors, even when working with multi-gigabyte files. **(No changes to CLI versions)**
 
 -   #### **🏗️ Core Architecture Improvements (Major Refactoring)**
@@ -160,12 +191,7 @@ This update focuses on pushing **system stability** and **large-file processing 
     -   **Asynchronous Temporary File Deletion:** Instead of a simple deletion method, the program now uses a background command to clean up leftover temporary files at startup. This completely prevents program launch delays or errors caused by file lock issues.
     -   **Enhanced Multithreading Stability:** Significantly improved the internal engine's synchronization logic to prevent potential conflicts when background tasks (extraction, rebuild) run concurrently while maintaining UI responsiveness.
     -   **Icon Renewal:** The program's icon has been newly created using Google AI Studio's Gemini 2.5 Flash Image model.
-
-<BR>
-
-<details>
-<summary>📜 Previous Updates - Click to Expand</summary>
-<BR>
+</details>
 
 <details>
 <summary>v3.2.0 (2025-12-13) - GUI Only</summary>
@@ -321,7 +347,7 @@ This update focused on preventing data loss during file extraction and significa
 <BR>
 
 ## 💾 Download <BR>
-**⚠️ To comply with copyright and licensing policies, this repository and distribution files do not contain FMOD API source code or binary files.** <BR>
+**⚠️ To comply with copyright and licensing policies, this repository and distribution files do not contain FMOD API source code or binary files.** <BR> <BR>
 To **Develop (Dev)** or **Use (Build)** the program, you must manually copy the necessary files to the appropriate folders by referring to the table below. <BR>
 
 | Program                                | URL                                                | Requirement | Note                                                                                           |
@@ -335,7 +361,9 @@ To **Develop (Dev)** or **Use (Build)** the program, you must manually copy the 
 **[ FMOD File Placement Table ]**
 - **FMOD API Download Path:** `C:\Program Files (x86)\FMOD SoundSystem\FMOD Studio API Windows` (Default)
 - **O Mark:** Indicates that the user must manually copy the file for the environment to work properly.
-- **Architecture Selection (GUI v3.1.0 and later):** Starting with `CS_GUI` v3.1.0, the project is built for **AnyCPU**, supporting both 32-bit and 64-bit environments. The program's operating mode is automatically determined by the architecture of the FMOD libraries (`.dll`) you copy. **The table below is based on x86 (32-bit)**. To run in 64-bit mode, you must use the `.dll` files from the `api\...\lib\x64` folder.
+- **Architecture Selection (GUI v3.1.0 and later):** `CS_GUI` v3.1.0 and later is built for **AnyCPU**, supporting both 32-bit and 64-bit environments.
+  - The program's operating mode is automatically determined by the architecture of the FMOD libraries (`.dll`) that the user copies.
+  - **The table below is based on x64 (64-bit)**, and **to run in 32-bit mode, you must use the `.dll` files from the `api\...\lib\x86` folder**.
 
 | Filename | Source Path (Based on FMOD Install Folder) | `CS` | `CS_GUI` | `CS_GUI (Build / Release)` |
 |---|---|:---:|:---:|:---:|
@@ -343,9 +371,9 @@ To **Develop (Dev)** or **Use (Build)** the program, you must manually copy the 
 | **fmod_dsp.cs** | `api\core\inc` | O | O | |
 | **fmod_errors.cs** | `api\core\inc` | O | O | |
 | **fmod_studio.cs** | `api\studio\inc` | | O | |
-| **fmod.dll** | `api\core\lib\x86` | O | O | O |
-| **fmodL.dll** | `api\core\lib\x86` | O | | |
-| **fmodstudio.dll** | `api\studio\lib\x86` | | O | O |
+| **fmod.dll** | `api\core\lib\x64` | O | O | O |
+| **fmodL.dll** | `api\core\lib\x64` | O | | |
+| **fmodstudio.dll** | `api\studio\lib\x64` | | O | O |
 | **fsbankcl.exe** | `bin` | | O | O |
 | **libfsbvorbis64.dll** | `bin` | | O | O |
 | **opus.dll** | `bin` | | O | O |
@@ -586,3 +614,5 @@ Users must manually obtain and place the `dll` and `exe` files listed below.
 -   **[ValtteriB77](https://github.com/ValtteriB77)**
     -   Shared a real-world modding case requiring the replacement of hundreds of files at once, highlighting the inefficiency of the single-file replacement method and suggesting the need for a batch rebuild feature. This feedback was a key motivation for implementing the current `Rebuild Manager`.
     -   Provided in-depth feedback on the completed `Auto-Match` feature based on a modding case for 'AC Rally'. They suggested the need for more advanced matching logic beyond simple name comparison, such as the ability to replace multiple versions of a sound (`_1`, `_2`, etc.) with a single file or to flexibly find files by matching only part of a name. This proposal has become a crucial roadmap for intelligently enhancing the `Auto-Match` feature in the future.
+-   **[BekinTech](https://github.com/BekinTech)**
+    -   They reported an extraction slowdown issue with a large FSB file containing 19,597 audio tracks, providing a specific case study and a crucial sample file for analysis. Thanks to their contribution, I was able to pinpoint the exact bottleneck where repeated application of WAV header standardization logic was causing severe performance degradation. This workflow has since been optimized, ensuring stable extraction speeds even for very large files.
