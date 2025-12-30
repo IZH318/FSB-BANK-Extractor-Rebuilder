@@ -19,7 +19,7 @@
  * Technical Environment:
  *  - Target Framework: .NET Framework 4.8
  *  - Key Dependencies: FMOD Core/Studio API, Newtonsoft.Json
- *  - Last Update: 2025-01-04
+ *  - Last Update: 2025-12-30
  */
 
 using System;
@@ -231,11 +231,13 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Defines the minimum allowed size for a sample header.
         /// </summary>
+        /// <remarks>This constraint prevents buffer overflows when parsing potentially malformed legacy FSB files.</remarks>
         public const int MinSampleHeaderSize = 24;
 
         /// <summary>
         /// Defines the maximum allowed size for a sample header.
         /// </summary>
+        /// <remarks>This constraint acts as a sanity check to avoid reading excessively large or invalid header data.</remarks>
         public const int MaxSampleHeaderSize = 128;
 
         /// <summary>
@@ -246,6 +248,9 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Defines the byte alignment requirement for legacy formats.
         /// </summary>
+        /// <remarks>
+        /// Legacy audio hardware and file formats often required data chunks to be aligned to 32-byte boundaries for optimal read performance.
+        /// </remarks>
         public const int LegacyAlignment = 32;
 
         /// <summary>
@@ -313,51 +318,57 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Indicates GameCube ADPCM compression.
         /// </summary>
+        /// <remarks>
+        /// This flag shares the same value as <see cref="IgnoreTags"/>. The FMOD SDK likely repurposed this bit in the mode flags over time.
+        /// </remarks>
         GcAdpcm = 0x02000000,
 
         /// <summary>
         /// Indicates that tags should be ignored.
         /// </summary>
+        /// <remarks>
+        /// This flag shares the same value as <see cref="GcAdpcm"/>. The context determines its meaning.
+        /// </remarks>
         IgnoreTags = 0x02000000
     }
 
     /// <summary>
-    /// Categorizes the types of nodes that can be displayed in the application's hierarchical views.
+    /// Categorizes the types of nodes that can be displayed in the application's hierarchical TreeView.
     /// </summary>
     public enum NodeType
     {
         /// <summary>
-        /// Represents a Bank node.
+        /// Represents a Bank node, typically a root node in the tree.
         /// </summary>
         Bank,
 
         /// <summary>
-        /// Represents an Event node.
+        /// Represents an Event node, a playable sound entity within a bank.
         /// </summary>
         Event,
 
         /// <summary>
-        /// Represents a Bus node.
+        /// Represents a Bus node, used for audio signal routing and mixing.
         /// </summary>
         Bus,
 
         /// <summary>
-        /// Represents a VCA node.
+        /// Represents a VCA node, used for controlling the volume of multiple busses.
         /// </summary>
         VCA,
 
         /// <summary>
-        /// Represents an FSB file container node.
+        /// Represents an FSB file container node, which holds one or more sub-sounds.
         /// </summary>
         FsbFile,
 
         /// <summary>
-        /// Represents a SubSound node.
+        /// Represents a SubSound node, an individual audio asset within an FSB.
         /// </summary>
         SubSound,
 
         /// <summary>
-        /// Represents a raw AudioData node.
+        /// Represents a raw AudioData node, the leaf node containing detailed audio metadata.
         /// </summary>
         AudioData
     }
@@ -385,39 +396,141 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
     public struct AudioInfo
     {
         // Basic Info.
+
+        /// <summary>
+        /// The name of the audio asset.
+        /// </summary>
         public string Name;
+
+        /// <summary>
+        /// The total length of the audio in milliseconds.
+        /// </summary>
         public uint LengthMs;
+
+        /// <summary>
+        /// The total length of the audio in PCM samples.
+        /// </summary>
         public uint LengthPcm;
+
+        /// <summary>
+        /// The encoding type of the sound.
+        /// </summary>
         public SOUND_TYPE Type;
+
+        /// <summary>
+        /// The container format of the sound data.
+        /// </summary>
         public SOUND_FORMAT Format;
+
+        /// <summary>
+        /// The number of audio channels (e.g., 1 for mono, 2 for stereo).
+        /// </summary>
         public int Channels;
+
+        /// <summary>
+        /// The bit depth of the audio data.
+        /// </summary>
         public int Bits;
+
+        /// <summary>
+        /// The sample rate of the audio in Hertz (Hz).
+        /// </summary>
         public int Frequency;
+
+        /// <summary>
+        /// The playback priority of the sound.
+        /// </summary>
         public int Priority;
 
         // Looping.
+
+        /// <summary>
+        /// The loop start point in PCM samples.
+        /// </summary>
         public uint LoopStart;
+
+        /// <summary>
+        /// The loop end point in PCM samples.
+        /// </summary>
         public uint LoopEnd;
+
+        /// <summary>
+        /// The mode flags, including looping and 3D settings.
+        /// </summary>
         public MODE Mode;
 
         // File Info.
+
+        /// <summary>
+        /// The index of this sub-sound within its parent FSB container.
+        /// </summary>
         public int Index;
+
+        /// <summary>
+        /// The full path to the source file (.bank or .fsb) containing this sound.
+        /// </summary>
         public string SourcePath;
+
+        /// <summary>
+        /// The file offset of the parent FSB container.
+        /// </summary>
         public long FileOffset;
+
+        /// <summary>
+        /// The offset of the raw audio data within the FSB container.
+        /// </summary>
         public uint DataOffset;
+
+        /// <summary>
+        /// The length of the raw audio data in bytes.
+        /// </summary>
         public uint DataLength;
 
         // Extended FMOD Info (For Detailed View).
+
+        /// <summary>
+        /// The minimum distance for 3D sound attenuation.
+        /// </summary>
         public float MinDistance3D;
+
+        /// <summary>
+        /// The maximum distance for 3D sound attenuation.
+        /// </summary>
         public float MaxDistance3D;
+
+        /// <summary>
+        /// The inside angle of the 3D sound projection cone.
+        /// </summary>
         public float InsideConeAngle;
+
+        /// <summary>
+        /// The outside angle of the 3D sound projection cone.
+        /// </summary>
         public float OutsideConeAngle;
+
+        /// <summary>
+        /// The volume outside the 3D sound projection cone.
+        /// </summary>
         public float OutsideVolume;
 
+        /// <summary>
+        /// The number of channels in a music module file.
+        /// </summary>
         public int MusicChannelCount;
+
+        /// <summary>
+        /// The playback speed of a music module file.
+        /// </summary>
         public float MusicSpeed;
 
+        /// <summary>
+        /// A list of metadata tags associated with the sound.
+        /// </summary>
         public List<string> Tags;
+
+        /// <summary>
+        /// A list of synchronization points defined for the sound.
+        /// </summary>
         public List<string> SyncPoints;
     }
 
@@ -426,16 +539,59 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
     /// </summary>
     public struct FsbContainerInfo
     {
+        /// <summary>
+        /// The number of sub-sounds within the container.
+        /// </summary>
         public int NumSubSounds;
+
+        /// <summary>
+        /// The total length of the container's primary sound in milliseconds.
+        /// </summary>
         public uint LengthMs;
+
+        /// <summary>
+        /// The encoding type of the sounds in the container.
+        /// </summary>
         public SOUND_TYPE Type;
+
+        /// <summary>
+        /// The container format of the sound data.
+        /// </summary>
         public SOUND_FORMAT Format;
+
+        /// <summary>
+        /// The number of audio channels.
+        /// </summary>
         public int Channels;
+
+        /// <summary>
+        /// The bit depth of the audio data.
+        /// </summary>
         public int Bits;
+
+        /// <summary>
+        /// The sample rate of the audio in Hertz (Hz).
+        /// </summary>
         public int Frequency;
+
+        /// <summary>
+        /// The playback priority of the sound.
+        /// </summary>
         public int Priority;
+
+        /// <summary>
+        /// The mode flags for the container.
+        /// </summary>
         public MODE Mode;
+
+        /// <summary>
+        /// A list of metadata tags associated with the container.
+        /// </summary>
         public List<string> Tags;
+
+        /// <summary>
+        /// A list of synchronization points defined for the container.
+        /// </summary>
         public List<string> SyncPoints;
     }
 
@@ -453,6 +609,14 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// Gets or sets the compression quality (primarily for Vorbis).
         /// </summary>
         public int Quality { get; set; }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RebuildOptions"/> class.
+        /// </summary>
+        public RebuildOptions()
+        {
+            // Default constructor.
+        }
     }
 
     #endregion
@@ -487,7 +651,10 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Retrieves a formatted list of properties and their values for the details panel.
         /// </summary>
-        /// <returns>A list of key-value pairs representing object metadata.</returns>
+        /// <returns>
+        /// A list of key-value pairs representing object metadata, where the key is a category
+        /// header and the value is the formatted property string.
+        /// </returns>
         public abstract List<KeyValuePair<string, string>> GetDetails();
     }
 
@@ -496,15 +663,41 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
     /// </summary>
     public class AudioDataNode : NodeData
     {
-        // Category constants for UI display.
-        private const string CatBasicInfo = "Basic Information";
-        private const string CatFormat = "Format";
-        private const string Cat3D = "3D Settings";
-        private const string CatLooping = "Looping";
-        private const string CatMusic = "Music Info";
-        private const string CatTags = "Metadata Tags";
-        private const string CatSync = "Sync Points";
-        private const string CatData = "Data Layout";
+        /// <summary>
+        /// Defines constants for strings used in the details view UI.
+        /// This centralizes UI text for easier maintenance and potential localization.
+        /// </summary>
+        private static class DetailViewStrings
+        {
+            // Category Headers.
+            public const string CatBasicInfo = "Basic Information";
+            public const string CatFormat = "Format";
+            public const string Cat3D = "3D Settings";
+            public const string CatLooping = "Looping";
+            public const string CatMusic = "Music Info";
+            public const string CatTags = "Metadata Tags";
+            public const string CatSync = "Sync Points";
+            public const string CatData = "Data Layout";
+
+            // Encoding Formats.
+            public const string EncodingVorbis = "Vorbis";
+            public const string EncodingFadpcm = "FADPCM";
+            public const string EncodingAtrac9 = "ATRAC9";
+            public const string EncodingXma = "XMA";
+            public const string EncodingMpeg = "MPEG (MP3)";
+            public const string EncodingImaAdpcm = "IMA ADPCM";
+            public const string EncodingGcAdpcm = "GameCube ADPCM";
+            public const string EncodingVag = "VAG (PlayStation)";
+            public const string EncodingPcm16 = "PCM 16-bit";
+            public const string EncodingPcm8 = "PCM 8-bit";
+            public const string EncodingPcmFloat32 = "PCM Float 32-bit";
+
+            // Container Types.
+            public const string ContainerFsbCompressed = "FSB (Compressed)";
+
+            // Default/Fallback Values.
+            public const string ValueNone = "None";
+        }
 
         /// <summary>
         /// Gets the category as AudioData.
@@ -519,8 +712,8 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Initializes a new instance of the <see cref="AudioDataNode"/> class.
         /// </summary>
-        /// <param name="audioInfo">The metadata associated with the audio stream.</param>
-        /// <param name="fsbOffset">The offset of the parent FSB container.</param>
+        /// <param name="audioInfo">The metadata associated with the audio stream. Must not be null.</param>
+        /// <param name="fsbOffset">The offset of the parent FSB container within its source file.</param>
         /// <param name="sourcePath">The path to the source file containing this audio.</param>
         public AudioDataNode(AudioInfo audioInfo, long fsbOffset, string sourcePath)
         {
@@ -531,117 +724,123 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
         /// <summary>
         /// Generates a detailed list of technical specifications for the audio.
-        /// Now includes extended FMOD properties (3D, Tags, SyncPoints).
         /// </summary>
-        /// <returns>A list of technical properties.</returns>
+        /// <remarks>
+        /// This method now includes extended FMOD properties such as 3D settings, metadata tags, and sync points.
+        /// </remarks>
+        /// <returns>
+        /// A list of key-value pairs representing audio metadata, where the key is a category
+        /// header and the value is the formatted property string.
+        /// </returns>
         public override List<KeyValuePair<string, string>> GetDetails()
         {
             var details = new List<KeyValuePair<string, string>>();
             var info = CachedAudio;
 
             // Add basic information.
-            details.Add(new KeyValuePair<string, string>(CatBasicInfo, $"Name: {info.Name}"));
-            details.Add(new KeyValuePair<string, string>(CatBasicInfo, $"Source File: {Path.GetFileName(info.SourcePath)}"));
-            details.Add(new KeyValuePair<string, string>(CatBasicInfo, $"Index: {info.Index}"));
-            details.Add(new KeyValuePair<string, string>(CatBasicInfo, $"Length: {info.LengthMs} ms ({info.LengthPcm} samples)"));
+            details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatBasicInfo, $"Name: {info.Name}"));
+            details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatBasicInfo, $"Source File: {Path.GetFileName(info.SourcePath)}"));
+            details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatBasicInfo, $"Index: {info.Index}"));
+            details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatBasicInfo, $"Length: {info.LengthMs} ms ({info.LengthPcm} samples)"));
 
-            // Determine the display string for the audio encoding format.
+            // Determine the display string for the audio encoding and container format.
+            // This logic block translates low-level FMOD enums into human-readable strings.
             string encodingDisplay = info.Type.ToString();
             string containerDisplay = info.Format.ToString();
             uint modeFlags = (uint)info.Mode;
 
             if (info.Type == SOUND_TYPE.VORBIS)
             {
-                encodingDisplay = "Vorbis";
+                encodingDisplay = DetailViewStrings.EncodingVorbis;
             }
             else if (info.Type == SOUND_TYPE.FADPCM)
             {
-                encodingDisplay = "FADPCM";
+                encodingDisplay = DetailViewStrings.EncodingFadpcm;
             }
             else if (info.Type == SOUND_TYPE.AT9)
             {
-                encodingDisplay = "ATRAC9";
+                encodingDisplay = DetailViewStrings.EncodingAtrac9;
             }
             else if (info.Type == SOUND_TYPE.XMA)
             {
-                encodingDisplay = "XMA";
+                encodingDisplay = DetailViewStrings.EncodingXma;
             }
             else if (info.Type == SOUND_TYPE.MPEG)
             {
-                encodingDisplay = "MPEG (MP3)";
+                encodingDisplay = DetailViewStrings.EncodingMpeg;
             }
             else
             {
-                // Handle legacy and compressed formats.
+                // Handle legacy and compressed formats by inspecting mode flags.
                 if ((modeFlags & (uint)FsbModeFlags.ImaAdpcm) != 0)
                 {
-                    encodingDisplay = "IMA ADPCM";
-                    containerDisplay = "FSB (Compressed)";
+                    encodingDisplay = DetailViewStrings.EncodingImaAdpcm;
+                    containerDisplay = DetailViewStrings.ContainerFsbCompressed;
                 }
                 else if ((modeFlags & (uint)FsbModeFlags.GcAdpcm) != 0 && info.Type == SOUND_TYPE.RAW)
                 {
-                    encodingDisplay = "GameCube ADPCM";
-                    containerDisplay = "FSB (Compressed)";
+                    encodingDisplay = DetailViewStrings.EncodingGcAdpcm;
+                    containerDisplay = DetailViewStrings.ContainerFsbCompressed;
                 }
                 else if ((modeFlags & (uint)FsbModeFlags.Xma) != 0)
                 {
-                    encodingDisplay = "XMA (Xbox)";
-                    containerDisplay = "FSB (Compressed)";
+                    encodingDisplay = DetailViewStrings.EncodingXma;
+                    containerDisplay = DetailViewStrings.ContainerFsbCompressed;
                 }
                 else if ((modeFlags & (uint)FsbModeFlags.Vag) != 0)
                 {
-                    encodingDisplay = "VAG (PlayStation)";
-                    containerDisplay = "FSB (Compressed)";
+                    encodingDisplay = DetailViewStrings.EncodingVag;
+                    containerDisplay = DetailViewStrings.ContainerFsbCompressed;
                 }
                 else if (info.Format == SOUND_FORMAT.PCM16)
                 {
-                    encodingDisplay = "PCM 16-bit";
+                    encodingDisplay = DetailViewStrings.EncodingPcm16;
                 }
                 else if (info.Format == SOUND_FORMAT.PCM8)
                 {
-                    encodingDisplay = "PCM 8-bit";
+                    encodingDisplay = DetailViewStrings.EncodingPcm8;
                 }
                 else if (info.Format == SOUND_FORMAT.PCMFLOAT)
                 {
-                    encodingDisplay = "PCM Float 32-bit";
+                    encodingDisplay = DetailViewStrings.EncodingPcmFloat32;
                 }
             }
 
             // Add format and technical properties.
-            details.Add(new KeyValuePair<string, string>(CatFormat, $"Encoding: {encodingDisplay}"));
-            details.Add(new KeyValuePair<string, string>(CatFormat, $"Container: {containerDisplay}"));
-            details.Add(new KeyValuePair<string, string>(CatFormat, $"Channels: {info.Channels}"));
-            details.Add(new KeyValuePair<string, string>(CatFormat, $"Frequency: {info.Frequency} Hz"));
-            details.Add(new KeyValuePair<string, string>(CatFormat, $"Bits: {info.Bits}-bit"));
-            details.Add(new KeyValuePair<string, string>(CatFormat, $"Priority: {info.Priority}"));
+            details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatFormat, $"Encoding: {encodingDisplay}"));
+            details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatFormat, $"Container: {containerDisplay}"));
+            details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatFormat, $"Channels: {info.Channels}"));
+            details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatFormat, $"Frequency: {info.Frequency} Hz"));
+            details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatFormat, $"Bits: {info.Bits}-bit"));
+            details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatFormat, $"Priority: {info.Priority}"));
 
             // Add 3D sound settings if applicable.
             if ((info.Mode & MODE._3D) != 0)
             {
-                details.Add(new KeyValuePair<string, string>(Cat3D, $"Min/Max Distance: {info.MinDistance3D:F2} / {info.MaxDistance3D:F2}"));
+                details.Add(new KeyValuePair<string, string>(DetailViewStrings.Cat3D, $"Min/Max Distance: {info.MinDistance3D:F2} / {info.MaxDistance3D:F2}"));
 
                 // Check if custom cone settings are applied (360 is the default full circle).
                 if (info.InsideConeAngle < 360 || info.OutsideConeAngle < 360)
                 {
-                    details.Add(new KeyValuePair<string, string>(Cat3D, $"Cone (In/Out/Vol): {info.InsideConeAngle}/{info.OutsideConeAngle}/{info.OutsideVolume}"));
+                    details.Add(new KeyValuePair<string, string>(DetailViewStrings.Cat3D, $"Cone (In/Out/Vol): {info.InsideConeAngle}/{info.OutsideConeAngle}/{info.OutsideVolume}"));
                 }
             }
 
             // Add looping information.
             bool hasLoop = (info.Mode & MODE.LOOP_NORMAL) != 0 || (info.LoopStart != 0 || info.LoopEnd != 0);
-            details.Add(new KeyValuePair<string, string>(CatLooping, $"Enabled: {hasLoop}"));
+            details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatLooping, $"Enabled: {hasLoop}"));
 
             if (hasLoop)
             {
-                details.Add(new KeyValuePair<string, string>(CatLooping, $"Range (ms): {info.LoopStart} - {info.LoopEnd}"));
+                details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatLooping, $"Range (ms): {info.LoopStart} - {info.LoopEnd}"));
             }
-            details.Add(new KeyValuePair<string, string>(CatLooping, $"Mode Flags: {info.Mode}"));
+            details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatLooping, $"Mode Flags: {info.Mode}"));
 
             // Add music module information.
             if (info.MusicChannelCount > 0)
             {
-                details.Add(new KeyValuePair<string, string>(CatMusic, $"Channels: {info.MusicChannelCount}"));
-                details.Add(new KeyValuePair<string, string>(CatMusic, $"Speed: {info.MusicSpeed}"));
+                details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatMusic, $"Channels: {info.MusicChannelCount}"));
+                details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatMusic, $"Speed: {info.MusicSpeed}"));
             }
 
             // Add metadata tags.
@@ -649,12 +848,12 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             {
                 foreach (var tag in info.Tags)
                 {
-                    details.Add(new KeyValuePair<string, string>(CatTags, tag));
+                    details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatTags, tag));
                 }
             }
             else
             {
-                details.Add(new KeyValuePair<string, string>(CatTags, "None"));
+                details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatTags, DetailViewStrings.ValueNone));
             }
 
             // Add sync points.
@@ -662,17 +861,17 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             {
                 foreach (var point in info.SyncPoints)
                 {
-                    details.Add(new KeyValuePair<string, string>(CatSync, point));
+                    details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatSync, point));
                 }
             }
             else
             {
-                details.Add(new KeyValuePair<string, string>(CatSync, "None"));
+                details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatSync, DetailViewStrings.ValueNone));
             }
 
             // Add raw data layout information.
-            details.Add(new KeyValuePair<string, string>(CatData, $"Offset: 0x{info.DataOffset:X}"));
-            details.Add(new KeyValuePair<string, string>(CatData, $"Size: {info.DataLength} bytes"));
+            details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatData, $"Offset: 0x{info.DataOffset:X}"));
+            details.Add(new KeyValuePair<string, string>(DetailViewStrings.CatData, $"Size: {info.DataLength} bytes"));
 
             return details;
         }
@@ -683,6 +882,14 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
     /// </summary>
     public class BankNode : NodeData
     {
+        /// <summary>
+        /// Defines constants for strings used in the details view UI.
+        /// </summary>
+        private static class DetailViewStrings
+        {
+            public const string StatusInvalidObject = "Status: Not loaded or invalid FMOD object";
+        }
+
         /// <summary>
         /// Gets the category as Bank.
         /// </summary>
@@ -703,9 +910,12 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Retrieves the bank's path and GUID.
+        /// Retrieves the bank's file path, FMOD path, GUID, and loading status.
         /// </summary>
-        /// <returns>A list containing bank metadata.</returns>
+        /// <returns>
+        /// A list of key-value pairs representing bank metadata, where the key is a category
+        /// header and the value is the formatted property string.
+        /// </returns>
         public override List<KeyValuePair<string, string>> GetDetails()
         {
             var details = new List<KeyValuePair<string, string>>();
@@ -739,7 +949,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             }
             else
             {
-                details.Add(new KeyValuePair<string, string>("Bank Information", "Status: Not loaded or invalid FMOD object"));
+                details.Add(new KeyValuePair<string, string>("Bank Information", DetailViewStrings.StatusInvalidObject));
             }
             return details;
         }
@@ -763,7 +973,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Initializes a new instance of the <see cref="EventNode"/> class.
         /// </summary>
-        /// <param name="evt">The native FMOD event description.</param>
+        /// <param name="evt">The native FMOD event description. Must be a valid handle.</param>
         public EventNode(EventDescription evt)
         {
             FmodObject = evt;
@@ -772,7 +982,10 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Retrieves the event's full path and GUID.
         /// </summary>
-        /// <returns>A list containing event metadata.</returns>
+        /// <returns>
+        /// A list of key-value pairs representing event metadata, where the key is a category
+        /// header and the value is the formatted property string.
+        /// </returns>
         public override List<KeyValuePair<string, string>> GetDetails()
         {
             var details = new List<KeyValuePair<string, string>>();
@@ -805,7 +1018,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Initializes a new instance of the <see cref="BusNode"/> class.
         /// </summary>
-        /// <param name="bus">The native FMOD bus object.</param>
+        /// <param name="bus">The native FMOD bus object. Must be a valid handle.</param>
         public BusNode(Bus bus)
         {
             FmodObject = bus;
@@ -814,7 +1027,10 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Retrieves the bus's path and GUID.
         /// </summary>
-        /// <returns>A list containing bus metadata.</returns>
+        /// <returns>
+        /// A list of key-value pairs representing bus metadata, where the key is a category
+        /// header and the value is the formatted property string.
+        /// </returns>
         public override List<KeyValuePair<string, string>> GetDetails()
         {
             var details = new List<KeyValuePair<string, string>>();
@@ -834,15 +1050,42 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
     /// </summary>
     public class FsbFileNode : NodeData
     {
+        /// <summary>
+        /// Defines constants for strings used in the details view UI.
+        /// </summary>
+        private static class DetailViewStrings
+        {
+            public const string ValueNone = "None";
+        }
+
+        /// <summary>
+        /// Gets the category of the node.
+        /// </summary>
         public override NodeType Type => NodeType.FsbFile;
+
+        /// <summary>
+        /// Gets or sets the summary metadata for the FSB container.
+        /// </summary>
         public FsbContainerInfo? ContainerInfo { get; set; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="FsbFileNode"/> class.
+        /// </summary>
+        /// <param name="sourcePath">The path to the file containing this FSB.</param>
+        /// <param name="fsbOffset">The byte offset of this FSB within the source file.</param>
         public FsbFileNode(string sourcePath, long fsbOffset)
         {
             ExtraInfo = sourcePath;
             FsbChunkOffset = fsbOffset;
         }
 
+        /// <summary>
+        /// Retrieves detailed information about the FSB container.
+        /// </summary>
+        /// <returns>
+        /// A list of key-value pairs representing FSB metadata, where the key is a category
+        /// header and the value is the formatted property string.
+        /// </returns>
         public override List<KeyValuePair<string, string>> GetDetails()
         {
             var details = new List<KeyValuePair<string, string>>
@@ -881,7 +1124,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 }
                 else
                 {
-                    details.Add(new KeyValuePair<string, string>("Metadata Tags", "None"));
+                    details.Add(new KeyValuePair<string, string>("Metadata Tags", DetailViewStrings.ValueNone));
                 }
 
                 // Add sync points.
@@ -894,7 +1137,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 }
                 else
                 {
-                    details.Add(new KeyValuePair<string, string>("Sync Points", "None"));
+                    details.Add(new KeyValuePair<string, string>("Sync Points", DetailViewStrings.ValueNone));
                 }
             }
             return details;
@@ -1060,11 +1303,11 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// Initializes a new instance of the <see cref="ProgressReport"/> struct.
         /// </summary>
         /// <param name="status">The message describing the current step.</param>
-        /// <param name="percentage">The completion percentage.</param>
+        /// <param name="percentage">The completion percentage, clamped between 0 and 100.</param>
         public ProgressReport(string status, int percentage)
         {
             Status = status;
-            Percentage = percentage;
+            Percentage = Math.Max(0, Math.Min(100, percentage));
         }
     }
 
@@ -1094,13 +1337,20 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             ERROR
         }
 
+        /// <summary>
+        /// The underlying stream writer for the log file.
+        /// </summary>
         private StreamWriter _writer;
+
+        /// <summary>
+        /// A lock object to ensure thread-safe access to the stream writer.
+        /// </summary>
         private readonly object _lock = new object();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="LogWriter"/> class and opens the file stream.
         /// </summary>
-        /// <param name="path">The full path to the log file.</param>
+        /// <param name="path">The full path to the log file to be created or overwritten.</param>
         public LogWriter(string path)
         {
             try
@@ -1144,6 +1394,33 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             }
             catch
             {
+                // Silently ignore logging failures to prevent application crashes.
+            }
+        }
+
+        /// <summary>
+        /// Writes a message to the log file without adding a new timestamp.
+        /// </summary>
+        /// <remarks>
+        /// This is used when the message is already fully formatted, such as when relaying output from an external tool.
+        /// </remarks>
+        /// <param name="formattedMessage">The pre-formatted message to write directly to the log.</param>
+        public void WriteRawNoTimestamp(string formattedMessage)
+        {
+            if (_writer == null)
+            {
+                return;
+            }
+
+            try
+            {
+                lock (_lock)
+                {
+                    _writer.WriteLine(formattedMessage);
+                }
+            }
+            catch
+            {
                 // Silently ignore logging failures.
             }
         }
@@ -1151,8 +1428,8 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Writes a structured tab-separated entry to the log, primarily for extraction reports.
         /// </summary>
-        /// <param name="level">The severity level.</param>
-        /// <param name="values">The values to be recorded in columns.</param>
+        /// <param name="level">The severity level of the log entry.</param>
+        /// <param name="values">The values to be recorded in separate columns.</param>
         public void LogTSV(LogLevel level, params string[] values)
         {
             if (_writer == null)
@@ -1163,7 +1440,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             try
             {
                 string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
-                string line = $"{timestamp}\t{level}\t{string.Join("\t", values)}";
+                string line = $"{timestamp} | {level}\t{string.Join("\t", values)}";
 
                 lock (_lock)
                 {
@@ -1185,21 +1462,24 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             {
                 try
                 {
-                    _writer.Close();
-                    _writer.Dispose();
+                    lock (_lock)
+                    {
+                        _writer.Close();
+                        _writer.Dispose();
+                        _writer = null;
+                    }
                 }
                 catch
                 {
                     // Ignore errors during disposal.
+                    _writer = null;
                 }
-
-                _writer = null;
             }
         }
     }
 
     /// <summary>
-    /// Represents a single search result item, decoupled from UI controls.
+    /// Represents a single search result item, decoupled from UI controls for better testability and data management.
     /// </summary>
     public class SearchResultItem
     {
@@ -1209,7 +1489,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         public string Name { get; set; }
 
         /// <summary>
-        /// Gets or sets the type description of the item.
+        /// Gets or sets the type description of the item (e.g., "Event", "SubSound").
         /// </summary>
         public string Type { get; set; }
 
@@ -1224,7 +1504,8 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         public bool Checked { get; set; }
 
         /// <summary>
-        /// Gets or sets the underlying data object (e.g., TreeNode or NodeData).
+        /// Gets or sets the underlying data object (typically a <see cref="System.Windows.Forms.TreeNode"/>)
+        /// that this search result represents.
         /// </summary>
         public object Tag { get; set; }
     }

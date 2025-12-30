@@ -17,7 +17,7 @@
  *
  * Technical Environment:
  *  - Target Framework: .NET Framework 4.8
- *  - Last Update: 2025-12-24
+ *  - Last Update: 2025-12-30
  */
 
 using System;
@@ -40,14 +40,34 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// </summary>
         private const int DEBOUNCE_INTERVAL_MS = 500;
 
-        // UI Status Messages
+        /// <summary>
+        /// Status message indicating the controller is idle and ready.
+        /// </summary>
         private const string MSG_READY = "[READY] Waiting for next operation.";
+
+        /// <summary>
+        /// Status message displayed while a search is in progress.
+        /// </summary>
         private const string MSG_SEARCHING = "[SEARCH] Searching for matching items...";
+
+        /// <summary>
+        /// Status message for when a search completes with no results.
+        /// </summary>
         private const string MSG_NO_MATCH = "[SEARCH] No matching items found.";
+
+        /// <summary>
+        /// Status message for when a search is attempted without a data source.
+        /// </summary>
         private const string MSG_NO_DATA = "[SEARCH] No data loaded.";
+
+        /// <summary>
+        /// Format string for displaying the number of found items.
+        /// </summary>
         private const string MSG_FOUND_FORMAT = "[SEARCH] Found {0} items.";
 
-        // Default type name if node data is missing
+        /// <summary>
+        /// Default type name to display if a node's data is missing or invalid.
+        /// </summary>
         private const string TYPE_UNKNOWN = "Unknown";
 
         #endregion
@@ -106,6 +126,10 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Releases all resources used by the <see cref="SearchController"/>.
         /// </summary>
+        /// <remarks>
+        /// This method stops and disposes the internal <see cref="Timer"/> instance to prevent resource leaks
+        /// and ensure no further Tick events are raised after the controller is disposed.
+        /// </remarks>
         public void Dispose()
         {
             _debounceTimer.Stop();
@@ -120,7 +144,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Sets the data source of original tree nodes to be used for searching.
         /// </summary>
-        /// <param name="originalNodes">The list of root TreeNodes from the main view. Can be null.</param>
+        /// <param name="originalNodes">The list of root TreeNodes from the main view. Can be <c>null</c>, in which case the data source will be cleared.</param>
         public void SetDataSource(List<TreeNode> originalNodes)
         {
             _dataSource = originalNodes ?? new List<TreeNode>();
@@ -129,7 +153,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Updates the current search query and restarts the debounce timer.
         /// </summary>
-        /// <param name="text">The text entered by the user to search for.</param>
+        /// <param name="text">The text entered by the user to search for. Can be <c>null</c> or empty.</param>
         public void UpdateSearchText(string text)
         {
             _pendingQuery = text;
@@ -140,7 +164,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Clears the search results and resets the UI state.
+        /// Clears the search results and resets the UI state to idle.
         /// </summary>
         public void ClearSearch()
         {
@@ -171,9 +195,9 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Performs an asynchronous search based on the provided query and notifies listeners.
+        /// Performs an asynchronous search based on the provided query and notifies listeners of the results.
         /// </summary>
-        /// <param name="query">The search string entered by the user.</param>
+        /// <param name="query">The search string entered by the user. Can be <c>null</c> or whitespace, which will clear the results.</param>
         private async Task PerformSearchAsync(string query)
         {
             string lowerQuery = query?.ToLower() ?? "";
@@ -230,9 +254,9 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Recursively searches a collection of TreeNodes for matches against the search query.
         /// </summary>
-        /// <param name="nodes">The collection of TreeNodes to search through.</param>
-        /// <param name="query">The lowercased search query.</param>
-        /// <param name="results">A list to which matched items will be added.</param>
+        /// <param name="nodes">The collection of TreeNodes to search through. Must not be <c>null</c>.</param>
+        /// <param name="query">The lowercased search query. Must not be <c>null</c>.</param>
+        /// <param name="results">A list to which matched items will be added. Must not be <c>null</c>.</param>
         private void SearchNodesRecursive(IEnumerable<TreeNode> nodes, string query, List<SearchResultItem> results)
         {
             foreach (TreeNode node in nodes)
@@ -264,7 +288,6 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 }
             }
         }
-
         #endregion
     }
 }

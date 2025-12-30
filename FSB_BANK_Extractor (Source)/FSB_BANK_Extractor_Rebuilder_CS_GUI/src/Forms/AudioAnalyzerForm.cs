@@ -21,7 +21,7 @@
  * Technical Environment:
  *  - FMOD Engine Version: v2.03.11 (Studio API minor release, build 158528)
  *  - Target Framework: .NET Framework 4.8
- *  - Last Update: 2025-12-24
+ *  - Last Update: 2025-12-30
  */
 
 using System;

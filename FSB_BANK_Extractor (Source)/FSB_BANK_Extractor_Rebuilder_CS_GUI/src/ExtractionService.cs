@@ -12,6 +12,8 @@
  * Key Features:
  *  - Batch Extraction: Processes a list of audio nodes and saves them as .wav files.
  *  - Single File Extraction: Provides a method to save a single audio stream to a specified path.
+ *  - Container Reuse Strategy: Optimizes batch extraction by opening the parent FSB container once
+ *    and retrieving sub-sounds, significantly reducing overhead for formats like Vorbis.
  *  - Dynamic Path Generation: Automatically creates a logical folder structure for extracted files.
  *  - Fallback Decoding: Uses a robust in-memory decoding strategy for legacy or problematic audio formats.
  *  - Verbose Logging: Generates detailed TSV log files for each extraction session if enabled.
@@ -27,7 +29,7 @@
  * Technical Environment:
  *  - Target Framework: .NET Framework 4.8
  *  - Key Dependencies: FMOD Core API
- *  - Last Update: 2025-12-24
+ *  - Last Update: 2025-12-30
  */
 
 using System;
@@ -50,7 +52,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
     /// </summary>
     public class ExtractionService
     {
-        #region Constants
+        #region 1. Constants
 
         /// <summary>
         /// A flag indicating that the user selected to save files in the source directory.
@@ -64,6 +66,26 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         private const float MIN_VALID_SAMPLE_RATE = 100.0f;
 
         /// <summary>
+        /// The file extension for extracted Waveform Audio files.
+        /// </summary>
+        private const string WAV_EXTENSION = ".wav";
+
+        /// <summary>
+        /// The prefix for the extraction log file name.
+        /// </summary>
+        private const string LOG_FILE_PREFIX = "ExtractionLog_";
+
+        /// <summary>
+        /// The file extension for log files.
+        /// </summary>
+        private const string LOG_FILE_EXTENSION = ".log";
+
+        /// <summary>
+        /// A separator line used in log file headers for visual distinction.
+        /// </summary>
+        private const string LOG_HEADER_SEPARATOR = "================================================================";
+
+        /// <summary>
         /// The header row for the CSV export file.
         /// </summary>
         private const string CSV_HEADER = "Type,Path,Name,Index,Source,Duration(ms),Length(pcm),Encoding,Container,Channels,Bits,Frequency(Hz),Priority,Mode,LoopStart,LoopEnd,3D_MinDistance,3D_MaxDistance,3D_ConeInsideAngle,3D_ConeOutsideAngle,3D_ConeOutsideVolume,Music_Channels,Music_Speed,Tags,SyncPoints,GUID";
@@ -75,7 +97,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
         #endregion
 
-        #region Fields
+        #region 2. Fields
 
         /// <summary>
         /// The FMOD Core System instance used for audio processing.
@@ -83,7 +105,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         private readonly FMOD.System _coreSystem;
 
         /// <summary>
-        /// A lock object to ensure thread-safe access to the FMOD Core System.
+        /// A lock object to ensure thread-safe access to the FMOD Core System from background tasks.
         /// </summary>
         private readonly object _coreSystemLock;
 
@@ -99,13 +121,13 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
         #endregion
 
-        #region Initialization
+        #region 3. Initialization
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ExtractionService"/> class.
         /// </summary>
-        /// <param name="coreSystem">The shared FMOD Core System instance.</param>
-        /// <param name="syncLock">The lock object for synchronizing FMOD API calls.</param>
+        /// <param name="coreSystem">The shared FMOD Core System instance. Must not be null.</param>
+        /// <param name="syncLock">The lock object for synchronizing FMOD API calls. Must not be null.</param>
         public ExtractionService(FMOD.System coreSystem, object syncLock)
         {
             _coreSystem = coreSystem;
@@ -115,15 +137,15 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
         #endregion
 
-        #region Public Methods
+        #region 4. Public Methods
 
         /// <summary>
         /// Sets the total number of files for the current batch extraction session.
         /// </summary>
-        /// <param name="total">The total count of files to be processed.</param>
+        /// <param name="total">The total count of files to be processed. Must be a non-negative number.</param>
         public void SetTotalFilesForSession(int total)
         {
-            _totalFilesForSession = total;
+            _totalFilesForSession = total >= 0 ? total : 0;
         }
 
         /// <summary>
@@ -131,18 +153,22 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// </summary>
         /// <remarks>
         /// Processing steps:
-        ///  1) Clear previous session logs and initialize counters.
-        ///  2) Iterate through the extraction list on a background thread.
-        ///  3) Determine output paths and ensure directories exist.
-        ///  4) Initialize verbose logging if enabled.
-        ///  5) Execute the extraction for the current file.
-        ///  6) Log the result and handle any exceptions.
+        ///  1) Group nodes by their source FSB container to enable reuse.
+        ///  2) Iterate through each container group.
+        ///  3) Open the parent FSB container once per group.
+        ///  4) For each audio item in the group, determine output path and initialize logger.
+        ///  5) Extract the sub-sound using the open container handle.
+        ///  6) Fallback to individual file extraction if container reuse fails.
+        ///  7) Log the result and handle exceptions.
         /// </remarks>
-        /// <param name="extractList">The list of TreeNodes containing AudioDataNode tags to extract.</param>
-        /// <param name="userSelectedPath">The base output path. Can be a specific folder or "##SAME_AS_SOURCE##".</param>
+        /// <param name="extractList">The list of TreeNodes containing AudioDataNode tags to extract. Must not be null.</param>
+        /// <param name="userSelectedPath">The base output path. Can be a specific folder or the "##SAME_AS_SOURCE##" flag. Must not be null or empty.</param>
         /// <param name="enableVerboseLog">A flag to indicate whether detailed logging should be enabled.</param>
-        /// <param name="progress">An IProgress instance to report progress back to the UI.</param>
-        /// <returns>A tuple containing the count of successful and failed extractions, and the total bytes written.</returns>
+        /// <param name="progress">An IProgress instance to report progress back to the UI. Can be null if progress reporting is not required.</param>
+        /// <returns>
+        /// A task that represents the asynchronous operation. The task result contains a tuple with the count of successful extractions,
+        /// the count of failed extractions, and the total bytes written to disk.
+        /// </returns>
         public async Task<(int SuccessCount, int FailCount, long TotalBytes)> ExtractAsync(
             List<TreeNode> extractList,
             string userSelectedPath,
@@ -152,195 +178,246 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             long totalExtractedBytes = 0;
             var failedExtractions = new ConcurrentBag<(string Context, Exception ex)>();
 
-            // Step 1: Clear previous session logs and initialize counters.
+            // Reset state for the new extraction session.
             _loggers.Clear();
-
             int totalFiles = extractList.Count;
             int processedCount = 0;
+
+            // Step 1: Group nodes by their source FSB container to enable reuse.
+            // This is a key optimization: by opening a container once, we avoid repeated file I/O
+            // and header parsing for every single sub-sound within it.
+            var groupedNodes = extractList
+                .Where(n => n.Tag is AudioDataNode)
+                .GroupBy(n =>
+                {
+                    var data = (AudioDataNode)n.Tag;
+                    return (SourcePath: data.CachedAudio.SourcePath, Offset: data.CachedAudio.FileOffset);
+                })
+                .ToList();
 
             // This entire block is executed on a background thread.
             await Task.Run(async () =>
             {
-                // Step 2: Iterate through the extraction list on a background thread.
-                foreach (var treeNode in extractList)
+                // Step 2: Iterate through each container group.
+                foreach (var group in groupedNodes)
                 {
-                    var audioNode = treeNode.Tag as AudioDataNode;
-                    if (audioNode == null)
-                    {
-                        continue;
-                    }
-
-                    var audioInfo = audioNode.CachedAudio;
-                    int currentFileIndex = Interlocked.Increment(ref processedCount);
+                    string containerPath = group.Key.SourcePath;
+                    long containerOffset = group.Key.Offset;
+                    Sound parentFsbSound = new Sound();
+                    bool parentLoaded = false;
 
                     try
                     {
-                        string finalDir;
-                        string outputFileName;
-                        string logDirectory;
-
-                        // Determine if the source is a standalone FSB or one embedded in a bank.
-                        bool isStandaloneFsb = treeNode.Parent?.Parent == null;
-
-                        // Step 3: Determine output paths and ensure directories exist.
-                        // This logic handles both saving to the source directory and a custom path,
-                        // while creating a logical folder hierarchy.
-                        if (userSelectedPath == PATH_FLAG_SAME_AS_SOURCE)
+                        // Step 3: Open the parent FSB container once per group.
+                        lock (_coreSystemLock)
                         {
-                            string sourceDir = Path.GetDirectoryName(audioInfo.SourcePath);
-                            if (isStandaloneFsb)
+                            CREATESOUNDEXINFO ex = new CREATESOUNDEXINFO
                             {
-                                string fsbFolderName = Utilities.SanitizeFileName(Path.GetFileNameWithoutExtension(audioInfo.SourcePath));
-                                finalDir = Path.Combine(sourceDir, fsbFolderName);
-                                logDirectory = finalDir;
-                                outputFileName = Utilities.SanitizeFileName(audioInfo.Name) + ".wav";
-                            }
-                            else
+                                cbsize = Marshal.SizeOf(typeof(CREATESOUNDEXINFO)),
+                                fileoffset = (uint)containerOffset
+                            };
+
+                            RESULT res = _coreSystem.createSound(containerPath, MODE.CREATESTREAM | MODE.OPENONLY | MODE.IGNORETAGS, ref ex, out parentFsbSound);
+                            if (res == RESULT.OK)
                             {
-                                string bankFileName = Utilities.SanitizeFileName(Path.GetFileNameWithoutExtension(treeNode.Parent.Parent.Text));
-                                string fsbNodeName = Utilities.SanitizeFileName(Path.GetFileNameWithoutExtension(treeNode.Parent.Text));
-                                string bankFolder = Path.Combine(sourceDir, bankFileName);
-                                finalDir = Path.Combine(bankFolder, fsbNodeName);
-                                logDirectory = bankFolder;
-                                outputFileName = Utilities.SanitizeFileName(audioInfo.Name) + ".wav";
+                                parentLoaded = true;
                             }
                         }
-                        else
+
+                        // Iterate through all items belonging to this container.
+                        foreach (var treeNode in group)
                         {
-                            if (isStandaloneFsb)
+                            var audioNode = (AudioDataNode)treeNode.Tag;
+                            var audioInfo = audioNode.CachedAudio;
+                            int currentFileIndex = Interlocked.Increment(ref processedCount);
+
+                            try
                             {
-                                string fsbFolderName = Utilities.SanitizeFileName(Path.GetFileNameWithoutExtension(audioInfo.SourcePath));
-                                finalDir = Path.Combine(userSelectedPath, fsbFolderName);
-                                logDirectory = finalDir;
-                            }
-                            else
-                            {
-                                string bankFileName = Utilities.SanitizeFileName(Path.GetFileNameWithoutExtension(treeNode.Parent.Parent.Text));
-                                string fsbNodeName = Utilities.SanitizeFileName(Path.GetFileNameWithoutExtension(treeNode.Parent.Text));
-                                string bankFolder = Path.Combine(userSelectedPath, bankFileName);
-                                finalDir = Path.Combine(bankFolder, fsbNodeName);
-                                logDirectory = bankFolder;
-                            }
-                            outputFileName = Utilities.SanitizeFileName(audioInfo.Name) + ".wav";
-                        }
+                                // Step 4: For each audio item, determine output path and initialize logger.
+                                string finalDir, outputFileName, logDirectory;
+                                bool isStandaloneFsb = treeNode.Parent?.Parent == null;
 
-                        // Ensure the target directory exists before writing files.
-                        Directory.CreateDirectory(finalDir);
-
-                        // Step 4: Initialize verbose logging if enabled.
-                        // The use of ConcurrentDictionary's GetOrAdd ensures that only one logger is created per directory.
-                        if (enableVerboseLog)
-                        {
-                            _loggers.GetOrAdd(logDirectory, path =>
-                            {
-                                string logFile = Path.Combine(path, $"ExtractionLog_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
-                                var newLogger = new LogWriter(logFile);
-                                newLogger.WriteRaw("================================================================");
-                                newLogger.WriteRaw($"[SESSION] Extraction Log Started at {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
-                                newLogger.WriteRaw("================================================================");
-                                newLogger.WriteRaw($"[TOOL]    App Version:     {FSB_BANK_Extractor_Rebuilder_CS_GUI.AppVersion} ({FSB_BANK_Extractor_Rebuilder_CS_GUI.AppLastUpdate})");
-                                newLogger.WriteRaw($"[TOOL]    Developer:       {FSB_BANK_Extractor_Rebuilder_CS_GUI.AppDeveloper}");
-                                newLogger.WriteRaw($"[ENGINE]  FMOD API:        {FSB_BANK_Extractor_Rebuilder_CS_GUI.FmodFullVersion}");
-                                newLogger.WriteRaw($"[SYSTEM]  OS Version:      {Environment.OSVersion}");
-                                newLogger.WriteRaw($"[SYSTEM]  Processor Count: {Environment.ProcessorCount} Cores (Sequential Processing)");
-                                newLogger.WriteRaw($"[PATH]    Exec Path:       {AppDomain.CurrentDomain.BaseDirectory}");
-                                newLogger.WriteRaw($"[TARGET]  Output Root:     {path}");
-                                newLogger.WriteRaw($"[QUEUE]   Total Files:     {_totalFilesForSession}");
-                                newLogger.WriteRaw("================================================================");
-                                newLogger.WriteRaw("");
-                                newLogger.WriteRaw(LOG_TSV_HEADER);
-                                return newLogger;
-                            });
-                        }
-
-                        string outputPath = Path.Combine(finalDir, outputFileName);
-                        Stopwatch sw = Stopwatch.StartNew();
-
-                        // Create a progress handler for the single file extraction to report detailed sub-progress.
-                        var singleFileProgressHandler = new Progress<ProgressReport>(report =>
-                        {
-                            double fileProgressStart = ((double)(currentFileIndex - 1) / totalFiles) * 100.0;
-                            double fileProgressRange = 100.0 / totalFiles;
-                            int overallProgress = (int)(fileProgressStart + (report.Percentage / 100.0 * fileProgressRange));
-                            string statusText = $"[EXTRACTING] [{currentFileIndex}/{totalFiles}] {audioInfo.Name} | {report.Status}";
-                            progress?.Report(new ProgressReport(statusText, overallProgress));
-                        });
-
-                        // Step 5: Execute the extraction for the current file.
-                        // Call the core extraction method to decode and save the audio data.
-                        long writtenBytes = await ExtractSingleWavAsync(audioInfo, outputPath, singleFileProgressHandler);
-
-                        sw.Stop();
-
-                        // Step 6: Log the result and handle any exceptions.
-                        // If extraction succeeds and logging is enabled, record the detailed results.
-                        if (writtenBytes >= 0 && enableVerboseLog && _loggers.TryGetValue(logDirectory, out var logger))
-                        {
-                            // Retrieve details from the node for logging.
-                            var details = audioNode.GetDetails();
-
-                            string GetDetailValue(string group, string propName)
-                            {
-                                var detail = details.FirstOrDefault(d => d.Key.Equals(group, StringComparison.OrdinalIgnoreCase) && d.Value.StartsWith(propName, StringComparison.OrdinalIgnoreCase));
-                                if (detail.Value == null)
+                                // Determine the final output directory and log file path based on user settings.
+                                if (userSelectedPath == PATH_FLAG_SAME_AS_SOURCE)
                                 {
-                                    return "";
+                                    string sourceDir = Path.GetDirectoryName(audioInfo.SourcePath);
+                                    if (isStandaloneFsb)
+                                    {
+                                        string fsbFolderName = Utilities.SanitizeFileName(Path.GetFileNameWithoutExtension(audioInfo.SourcePath));
+                                        finalDir = Path.Combine(sourceDir, fsbFolderName);
+                                        logDirectory = finalDir;
+                                    }
+                                    else
+                                    {
+                                        string bankFileName = Utilities.SanitizeFileName(Path.GetFileNameWithoutExtension(treeNode.Parent.Parent.Text));
+                                        string fsbNodeName = Utilities.SanitizeFileName(Path.GetFileNameWithoutExtension(treeNode.Parent.Text));
+                                        string bankFolder = Path.Combine(sourceDir, bankFileName);
+                                        finalDir = Path.Combine(bankFolder, fsbNodeName);
+                                        logDirectory = bankFolder;
+                                    }
                                 }
-                                var parts = detail.Value.Split(new[] { ':' }, 2);
-                                return parts.Length > 1 ? parts[1].Trim() : "";
-                            }
+                                else
+                                {
+                                    if (isStandaloneFsb)
+                                    {
+                                        string fsbFolderName = Utilities.SanitizeFileName(Path.GetFileNameWithoutExtension(audioInfo.SourcePath));
+                                        finalDir = Path.Combine(userSelectedPath, fsbFolderName);
+                                        logDirectory = finalDir;
+                                    }
+                                    else
+                                    {
+                                        string bankFileName = Utilities.SanitizeFileName(Path.GetFileNameWithoutExtension(treeNode.Parent.Parent.Text));
+                                        string fsbNodeName = Utilities.SanitizeFileName(Path.GetFileNameWithoutExtension(treeNode.Parent.Text));
+                                        string bankFolder = Path.Combine(userSelectedPath, bankFileName);
+                                        finalDir = Path.Combine(bankFolder, fsbNodeName);
+                                        logDirectory = bankFolder;
+                                    }
+                                }
+                                outputFileName = Utilities.SanitizeFileName(audioInfo.Name) + WAV_EXTENSION;
+                                string outputPath = Path.Combine(finalDir, outputFileName);
+                                Directory.CreateDirectory(finalDir);
 
-                            // Extract values safely, falling back to raw data if GetDetails returns empty strings.
-                            string encoding = GetDetailValue("Format", "Encoding");
-                            if (string.IsNullOrEmpty(encoding))
+                                // Initialize a logger for the target directory if verbose logging is enabled.
+                                if (enableVerboseLog)
+                                {
+                                    _loggers.GetOrAdd(logDirectory, path =>
+                                    {
+                                        string logFileName = $"{LOG_FILE_PREFIX}{DateTime.Now:yyyy-MM-dd_HH-mm-ss}{LOG_FILE_EXTENSION}";
+                                        string logFile = Path.Combine(path, logFileName);
+                                        var newLogger = new LogWriter(logFile);
+                                        newLogger.WriteRaw(LOG_HEADER_SEPARATOR);
+                                        newLogger.WriteRaw($"[SESSION] Extraction Log Started at {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
+                                        newLogger.WriteRaw(LOG_HEADER_SEPARATOR);
+                                        newLogger.WriteRaw($"[TOOL]    App Version:     {FSB_BANK_Extractor_Rebuilder_CS_GUI.AppVersion} ({FSB_BANK_Extractor_Rebuilder_CS_GUI.AppLastUpdate})");
+                                        newLogger.WriteRaw($"[TOOL]    Developer:       {FSB_BANK_Extractor_Rebuilder_CS_GUI.AppDeveloper}");
+                                        newLogger.WriteRaw($"[ENGINE]  FMOD API:        {FSB_BANK_Extractor_Rebuilder_CS_GUI.FmodFullVersion}");
+                                        newLogger.WriteRaw($"[SYSTEM]  OS Version:      {Environment.OSVersion}");
+                                        newLogger.WriteRaw($"[SYSTEM]  Processor Count: {Environment.ProcessorCount} Cores");
+                                        newLogger.WriteRaw($"[PATH]    Exec Path:       {AppDomain.CurrentDomain.BaseDirectory}");
+                                        newLogger.WriteRaw($"[TARGET]  Output Root:     {path}");
+                                        newLogger.WriteRaw($"[QUEUE]   Total Files:     {_totalFilesForSession}");
+                                        newLogger.WriteRaw(LOG_HEADER_SEPARATOR);
+                                        newLogger.WriteRaw("");
+                                        newLogger.WriteRaw(LOG_TSV_HEADER);
+                                        return newLogger;
+                                    });
+                                }
+
+                                Stopwatch sw = Stopwatch.StartNew();
+                                long writtenBytes = -1;
+
+                                // Create a progress handler to scale sub-progress to the overall progress range.
+                                var singleFileProgressHandler = new Progress<ProgressReport>(report =>
+                                {
+                                    double fileProgressStart = ((double)(currentFileIndex - 1) / totalFiles) * 100.0;
+                                    double fileProgressRange = 100.0 / totalFiles;
+                                    int overallProgress = (int)(fileProgressStart + (report.Percentage / 100.0 * fileProgressRange));
+                                    string statusText = $"[EXTRACTING] [{currentFileIndex}/{totalFiles}] {audioInfo.Name} | {report.Status}";
+                                    progress?.Report(new ProgressReport(statusText, overallProgress));
+                                });
+
+                                // Step 5: Extract the sub-sound using the open container handle.
+                                if (parentLoaded)
+                                {
+                                    Sound subSound = new Sound();
+                                    bool subRetrieved = false;
+
+                                    lock (_coreSystemLock)
+                                    {
+                                        if (parentFsbSound.getSubSound(audioInfo.Index, out subSound) == RESULT.OK)
+                                        {
+                                            subRetrieved = true;
+                                        }
+                                    }
+
+                                    if (subRetrieved)
+                                    {
+                                        try
+                                        {
+                                            writtenBytes = await ExtractSoundDataAsync(subSound, audioInfo, outputPath, singleFileProgressHandler);
+                                        }
+                                        finally
+                                        {
+                                            lock (_coreSystemLock)
+                                            {
+                                                Utilities.SafeRelease(ref subSound);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Step 6: Fallback to individual file extraction if container reuse fails.
+                                if (writtenBytes < 0)
+                                {
+                                    writtenBytes = await ExtractSingleWavAsync(audioInfo, outputPath, singleFileProgressHandler);
+                                }
+
+                                sw.Stop();
+
+                                // Step 7: Log the result of the operation.
+                                if (writtenBytes >= 0 && enableVerboseLog && _loggers.TryGetValue(logDirectory, out var logger))
+                                {
+                                    // Log detailed information about the successful extraction.
+                                    var details = audioNode.GetDetails();
+                                    string GetDetailValue(string group, string propName)
+                                    {
+                                        var detail = details.FirstOrDefault(d => d.Key.Equals(group, StringComparison.OrdinalIgnoreCase) && d.Value.StartsWith(propName, StringComparison.OrdinalIgnoreCase));
+                                        return detail.Value?.Split(new[] { ':' }, 2).LastOrDefault()?.Trim() ?? "";
+                                    }
+
+                                    string encoding = GetDetailValue("Format", "Encoding");
+                                    if (string.IsNullOrEmpty(encoding))
+                                    {
+                                        encoding = audioInfo.Type.ToString();
+                                    }
+                                    string container = GetDetailValue("Format", "Container");
+                                    if (string.IsNullOrEmpty(container))
+                                    {
+                                        container = audioInfo.Format.ToString();
+                                    }
+                                    string frequency = GetDetailValue("Format", "Frequency").Replace(" Hz", "");
+                                    if (string.IsNullOrEmpty(frequency))
+                                    {
+                                        frequency = audioInfo.Frequency.ToString();
+                                    }
+                                    string duration = GetDetailValue("Time", "Duration (ms)");
+                                    if (string.IsNullOrEmpty(duration))
+                                    {
+                                        duration = audioInfo.LengthMs.ToString();
+                                    }
+                                    string loopRange = $"{audioInfo.LoopStart} - {audioInfo.LoopEnd}";
+
+                                    logger.LogTSV(LogWriter.LogLevel.INFO,
+                                        Path.GetFileName(audioInfo.SourcePath),
+                                        audioInfo.Name,
+                                        "OK",
+                                        encoding,
+                                        container,
+                                        audioInfo.Channels.ToString(),
+                                        audioInfo.Bits.ToString(),
+                                        frequency,
+                                        duration,
+                                        loopRange,
+                                        $"0x{audioInfo.DataOffset:X}",
+                                        outputPath,
+                                        sw.ElapsedMilliseconds.ToString());
+
+                                    Interlocked.Add(ref totalExtractedBytes, writtenBytes);
+                                }
+                            }
+                            catch (Exception ex)
                             {
-                                encoding = audioInfo.Type.ToString();
+                                failedExtractions.Add((audioInfo.Name, ex));
                             }
-
-                            string container = GetDetailValue("Format", "Container");
-                            if (string.IsNullOrEmpty(container))
-                            {
-                                container = audioInfo.Format.ToString();
-                            }
-
-                            string frequency = GetDetailValue("Format", "Frequency").Replace(" Hz", "");
-                            if (string.IsNullOrEmpty(frequency))
-                            {
-                                frequency = audioInfo.Frequency.ToString();
-                            }
-
-                            string duration = GetDetailValue("Time", "Duration (ms)");
-                            if (string.IsNullOrEmpty(duration))
-                            {
-                                duration = audioInfo.LengthMs.ToString();
-                            }
-
-                            // Use original loop points for accuracy in logs.
-                            string loopRange = $"{audioInfo.LoopStart} - {audioInfo.LoopEnd}";
-
-                            logger.LogTSV(LogWriter.LogLevel.INFO,
-                                Path.GetFileName(audioInfo.SourcePath),
-                                audioInfo.Name,
-                                "OK",
-                                encoding,
-                                container,
-                                audioInfo.Channels.ToString(),
-                                audioInfo.Bits.ToString(),
-                                frequency,
-                                duration,
-                                loopRange,
-                                $"0x{audioInfo.DataOffset:X}",
-                                outputPath,
-                                sw.ElapsedMilliseconds.ToString());
-
-                            Interlocked.Add(ref totalExtractedBytes, writtenBytes);
                         }
                     }
-                    // Catch any exceptions during the process to prevent the entire batch from failing.
-                    // The failed item is added to a concurrent bag for later reporting.
-                    catch (Exception ex)
+                    finally
                     {
-                        failedExtractions.Add((audioInfo.Name, ex));
+                        // Clean up the parent container after processing all items in the group.
+                        lock (_coreSystemLock)
+                        {
+                            Utilities.SafeRelease(ref parentFsbSound);
+                        }
                     }
                 }
             });
@@ -358,43 +435,41 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Asynchronously exports the structure of all loaded nodes to a CSV file.
         /// </summary>
-        /// <param name="nodes">The root collection of TreeNodes to export.</param>
-        /// <param name="filePath">The path where the CSV file will be saved.</param>
+        /// <param name="nodes">The root collection of TreeNodes to export. Must not be null.</param>
+        /// <param name="filePath">The path where the CSV file will be saved. Must be a valid and writable path.</param>
         public async Task ExportToCsvAsync(TreeNodeCollection nodes, string filePath)
         {
             var sb = new StringBuilder();
-
-            // Define the CSV header row.
             sb.AppendLine(CSV_HEADER);
-
-            // Recursively process all nodes and append their data to the StringBuilder.
             ExportNodesRecursive(nodes, sb, "");
-
-            // Write the complete CSV content to the specified file.
             await Utilities.WriteAllTextAsync(filePath, sb.ToString());
         }
 
         /// <summary>
         /// Extracts a single audio stream asynchronously to a .wav file.
         /// </summary>
-        /// <param name="info">The <see cref="AudioInfo"/> object describing the audio to extract.</param>
-        /// <param name="outputPath">The full path of the output .wav file.</param>
-        /// <param name="progress">An optional IProgress instance to report sub-progress.</param>
-        /// <returns>The total number of bytes written to the file, or -1 on failure.</returns>
+        /// <remarks>
+        /// This method serves as the core extraction unit and is also used as a fallback by the batch processor.
+        /// It determines the optimal extraction strategy (streaming vs. in-memory) based on the audio format.
+        /// A fallback to in-memory decoding is used for legacy formats (e.g., MPEG, IMA ADPCM) that may not
+        /// stream correctly via FMOD's file-to-file API, ensuring maximum compatibility.
+        /// </remarks>
+        /// <param name="info">The <see cref="AudioInfo"/> object describing the audio to extract. Must not be null.</param>
+        /// <param name="outputPath">The full path of the output .wav file. Must not be null or empty.</param>
+        /// <param name="progress">An optional IProgress instance to report sub-progress. Can be null.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains the total number of bytes written to the file.</returns>
+        /// <exception cref="Exception">Thrown when both primary and fallback extraction methods fail.</exception>
         public async Task<long> ExtractSingleWavAsync(AudioInfo info, string outputPath, IProgress<ProgressReport> progress = null)
         {
             long bytesWritten = -1;
 
-            // This operation is executed within a Task.Run, allowing synchronous I/O for maximum speed
-            // without blocking the UI thread.
-            await Task.Run(() =>
+            await Task.Run(async () =>
             {
                 Sound s = new Sound();
                 Sound sub = new Sound();
                 bool streamSuccess = false;
 
-                // Determine the optimal extraction strategy. A fallback to in-memory decoding is used for
-                // legacy formats (e.g., MPEG, IMA ADPCM) that may not stream correctly via FMOD's file API.
+                // Determine the extraction strategy.
                 bool useInMemoryFallback = info.Type == SOUND_TYPE.MPEG || ((uint)info.Mode & (uint)FsbModeFlags.ImaAdpcm) != 0;
 
                 // Attempt the primary, high-performance stream-to-disk method first.
@@ -405,13 +480,11 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                         // Lock the FMOD Core System to ensure thread-safe API calls from this background task.
                         lock (_coreSystemLock)
                         {
-                            // Initialize extended info for loading specific file offsets.
                             CREATESOUNDEXINFO ex = new CREATESOUNDEXINFO
                             {
                                 cbsize = Marshal.SizeOf(typeof(CREATESOUNDEXINFO)),
                                 fileoffset = (uint)info.FileOffset
                             };
-
                             RESULT res = _coreSystem.createSound(info.SourcePath, MODE.CREATESTREAM | MODE.OPENONLY | MODE.IGNORETAGS, ref ex, out s);
 
                             if (res == RESULT.OK)
@@ -425,56 +498,13 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                                 {
                                     sub = s;
                                 }
-
-                                sub.getLength(out uint lenBytes, TIMEUNIT.PCMBYTES);
-                                sub.getFormat(out _, out SOUND_FORMAT fmt, out int ch, out int bits);
-                                sub.getDefaults(out float rate, out _);
-
-                                if (rate < MIN_VALID_SAMPLE_RATE)
-                                {
-                                    rate = info.Frequency;
-                                }
-
-                                // Report initial status.
-                                progress?.Report(new ProgressReport("Writing to disk...", 0));
-
-                                // Write the decoded PCM data directly to the output file stream.
-                                using (FileStream fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, AppConstants.BufferSizeLarge, FileOptions.Asynchronous))
-                                {
-                                    // Create and write the WAV header first.
-                                    byte[] header = Utilities.CreateWavHeader((int)lenBytes, (int)rate, ch, bits > 0 ? bits : 16, fmt == SOUND_FORMAT.PCMFLOAT);
-                                    fs.Write(header, 0, header.Length);
-
-                                    // Read the decoded PCM data in chunks and write to the file.
-                                    sub.seekData(0);
-                                    byte[] buf = new byte[AppConstants.BufferSizeLarge];
-                                    uint totalRead = 0;
-
-                                    while (totalRead < lenBytes)
-                                    {
-                                        sub.readData(buf, out uint read);
-                                        if (read == 0)
-                                        {
-                                            break;
-                                        }
-                                        fs.Write(buf, 0, (int)read);
-                                        totalRead += read;
-
-                                        // Report real-time progress in megabytes for better user feedback on large files.
-                                        if (lenBytes > 0)
-                                        {
-                                            double currentMb = totalRead / AppConstants.BytesToMegabytes;
-                                            double totalMb = lenBytes / AppConstants.BytesToMegabytes;
-                                            int percent = (int)((double)totalRead / lenBytes * 100);
-
-                                            string progressText = $"{currentMb:F2} MB / {totalMb:F2} MB";
-                                            progress?.Report(new ProgressReport(progressText, percent));
-                                        }
-                                    }
-                                    bytesWritten = fs.Length;
-                                }
-                                streamSuccess = true;
                             }
+                        }
+
+                        if (sub.hasHandle())
+                        {
+                            bytesWritten = await ExtractSoundDataAsync(sub, info, outputPath, progress);
+                            streamSuccess = (bytesWritten >= 0);
                         }
                     }
                     catch (Exception ex)
@@ -497,7 +527,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     }
                 }
 
-                // If the streaming method fails or is skipped, attempt the in-memory fallback.
+                // If the primary streaming method failed or was bypassed, attempt the in-memory fallback.
                 if (!streamSuccess)
                 {
                     try
@@ -509,15 +539,12 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
                         if (wavData != null)
                         {
-                            // Report progress before writing the complete in-memory buffer to disk.
                             double sizeMb = wavData.Length / AppConstants.BytesToMegabytes;
                             progress?.Report(new ProgressReport($"Writing {sizeMb:F2} MB to disk...", 80));
 
-                            // Use standard file writing (which uses efficient buffers internally).
-                            // A FileStream is used here for consistency with the async I/O pattern used elsewhere.
                             using (var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, AppConstants.BufferSizeSmall, FileOptions.Asynchronous))
                             {
-                                fs.Write(wavData, 0, wavData.Length);
+                                await fs.WriteAsync(wavData, 0, wavData.Length);
                             }
                             bytesWritten = wavData.Length;
                         }
@@ -530,28 +557,102 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 }
             });
 
-            // Report final completion status.
             progress?.Report(new ProgressReport("Complete", 100));
-
-            // If bytesWritten is still negative, an unrecoverable error occurred.
             if (bytesWritten <= 0)
             {
                 throw new Exception($"Failed to extract audio: {info.Name}");
             }
-
             return bytesWritten;
         }
 
         #endregion
 
-        #region Private Helper Methods
+        #region 5. Private Helper Methods
+
+        /// <summary>
+        /// Extracts decoded PCM audio data from a given FMOD Sound handle and writes it to a WAV file.
+        /// </summary>
+        /// <param name="sound">The FMOD Sound handle (typically a subsound) to extract. Must be a valid handle.</param>
+        /// <param name="info">Metadata about the audio, used for fallback values like frequency. Must not be null.</param>
+        /// <param name="outputPath">The destination path for the WAV file. Must not be null.</param>
+        /// <param name="progress">The progress reporter. Can be null.</param>
+        /// <returns>The number of bytes written to the file, or -1 on failure.</returns>
+        private async Task<long> ExtractSoundDataAsync(Sound sound, AudioInfo info, string outputPath, IProgress<ProgressReport> progress)
+        {
+            long bytesWritten = 0;
+            try
+            {
+                // Retrieve audio format metadata directly from the FMOD sound handle.
+                sound.getLength(out uint lenBytes, TIMEUNIT.PCMBYTES);
+                sound.getFormat(out _, out SOUND_FORMAT fmt, out int ch, out int bits);
+                sound.getDefaults(out float rate, out _);
+
+                // FMOD can sometimes return an invalid default rate; fall back to our parsed metadata.
+                if (rate < MIN_VALID_SAMPLE_RATE)
+                {
+                    rate = info.Frequency;
+                }
+
+                progress?.Report(new ProgressReport("Writing to disk...", 0));
+
+                using (FileStream fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, AppConstants.BufferSizeLarge, FileOptions.Asynchronous))
+                {
+                    // Create and write the WAV header first.
+                    byte[] header = Utilities.CreateWavHeader((int)lenBytes, (int)rate, ch, bits > 0 ? bits : 16, fmt == SOUND_FORMAT.PCMFLOAT);
+                    await fs.WriteAsync(header, 0, header.Length);
+
+                    // Reset the read position to the start of the sub-sound's data.
+                    // This is critical when reusing a parent container handle to prevent reading stale or incorrect data.
+                    lock (_coreSystemLock)
+                    {
+                        sound.seekData(0);
+                    }
+
+                    // Read the decoded PCM data in chunks and write to the file.
+                    byte[] buf = new byte[AppConstants.BufferSizeLarge];
+                    uint totalRead = 0;
+
+                    while (totalRead < lenBytes)
+                    {
+                        uint read = 0;
+                        lock (_coreSystemLock)
+                        {
+                            sound.readData(buf, out read);
+                        }
+                        if (read == 0)
+                        {
+                            break;
+                        }
+
+                        await fs.WriteAsync(buf, 0, (int)read);
+                        totalRead += read;
+
+                        // Report real-time progress in megabytes for better user feedback on large files.
+                        if (lenBytes > 0)
+                        {
+                            double currentMb = totalRead / AppConstants.BytesToMegabytes;
+                            double totalMb = lenBytes / AppConstants.BytesToMegabytes;
+                            int percent = (int)((double)totalRead / lenBytes * 100);
+                            progress?.Report(new ProgressReport($"{currentMb:F2} MB / {totalMb:F2} MB", percent));
+                        }
+                    }
+                    bytesWritten = fs.Length;
+                }
+                return bytesWritten;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ExtractSoundDataAsync Error: {ex.Message}");
+                return -1;
+            }
+        }
 
         /// <summary>
         /// Recursively traverses a collection of TreeNodes and appends their data to a StringBuilder for CSV export.
         /// </summary>
         /// <param name="nodes">The collection of TreeNodes to process.</param>
-        /// <param name="sb">The StringBuilder to append CSV lines to.</param>
-        /// <param name="path">The current hierarchical path string.</param>
+        /// <param name="sb">The StringBuilder to append CSV lines to. Must not be null.</param>
+        /// <param name="path">The current hierarchical path string, used to build the full path for the current node.</param>
         private void ExportNodesRecursive(TreeNodeCollection nodes, StringBuilder sb, string path)
         {
             foreach (TreeNode node in nodes)
@@ -559,7 +660,6 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 string currentPath = string.IsNullOrEmpty(path) ? node.Text : $"{path}/{node.Text}";
                 if (node.Tag is NodeData data)
                 {
-                    // Use a list to build the fields in the correct order.
                     var fields = new List<string>(26);
 
                     // Common fields.
@@ -570,17 +670,11 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     if (data is AudioDataNode audioNode)
                     {
                         AudioInfo info = audioNode.CachedAudio;
-
                         var details = audioNode.GetDetails();
                         string GetDetailValue(string group, string propName)
                         {
                             var detail = details.FirstOrDefault(d => d.Key.Equals(group, StringComparison.OrdinalIgnoreCase) && d.Value.StartsWith(propName, StringComparison.OrdinalIgnoreCase));
-                            if (detail.Value == null)
-                            {
-                                return "";
-                            }
-                            var parts = detail.Value.Split(new[] { ':' }, 2);
-                            return parts.Length > 1 ? parts[1].Trim() : "";
+                            return detail.Value?.Split(new[] { ':' }, 2).LastOrDefault()?.Trim() ?? "";
                         }
                         string encoding = GetDetailValue("Format", "Encoding");
                         string container = GetDetailValue("Format", "Container");
@@ -608,7 +702,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                         fields.Add(info.MusicChannelCount > 0 ? info.MusicSpeed.ToString("F2") : "");
                         fields.Add((info.Tags != null && info.Tags.Count > 0) ? Utilities.SanitizeCsvField(string.Join("; ", info.Tags)) : "");
                         fields.Add((info.SyncPoints != null && info.SyncPoints.Count > 0) ? Utilities.SanitizeCsvField(string.Join("; ", info.SyncPoints)) : "");
-                        fields.Add(""); // GUID for AudioDataNode is empty.
+                        fields.Add("");
                     }
                     else
                     {
@@ -658,11 +752,8 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                         fields.Add(""); // SyncPoints
                         fields.Add(guid); // GUID
                     }
-
                     sb.AppendLine(string.Join(",", fields));
                 }
-
-                // Continue the recursion for child nodes.
                 if (node.Nodes.Count > 0)
                 {
                     ExportNodesRecursive(node.Nodes, sb, currentPath);

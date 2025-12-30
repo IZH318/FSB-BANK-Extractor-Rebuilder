@@ -1,20 +1,19 @@
 ﻿/**
  * @file FSB_BANK_Extractor_Rebuilder_CS_GUI.cs
- * @brief Provides the main graphical user interface for browsing, playing, extracting, and rebuilding FMOD audio containers.
+ * @brief Main graphical user interface for the FMOD FSB/BANK Extractor and Rebuilder application.
  * @author (Github) IZH318 (https://github.com/IZH318)
  *
  * @details
- * This file contains the primary UI form and logic for the application. It orchestrates user interactions,
- * manages the overall application state, and delegates complex tasks like file parsing, audio playback,
- * extraction, and rebuilding to dedicated service classes. It serves as the central hub connecting all
- * other components of the application.
+ * This file defines the primary UI form and its logic. It serves as the central hub, orchestrating user interactions,
+ * managing the application's state, and delegating complex tasks like file parsing, audio playback,
+ * extraction, and rebuilding to dedicated service classes.
  *
  * Key Features:
  *  - Main Application Window: Implements the primary user interface including menus, playback controls, and data views.
  *  - File and Folder Loading: Handles user input for loading .bank and .fsb files via menus or Drag & Drop.
  *  - UI State Management: Controls the enabled/disabled state of UI elements based on the application's operational state.
  *  - Event Orchestration: Connects UI events to backend services (FmodManager, ExtractionService, RebuildService).
- *  - Data Display: Manages TreeView for hierarchy, ListView for search results, and details panel.
+ *  - Data Display: Manages the TreeView for hierarchy, ListView for search results, and details panel.
  *  - User Convenience Tools: Implements keyword search, index-based selection, and CSV export.
  *
  * @acknowledgements
@@ -31,7 +30,7 @@
  *  - Architecture: Any CPU (Tested primarily on x64)
  *  - Key Dependencies: Newtonsoft.Json
  *  - Primary Test Platform: Windows 10 64-bit
- *  - Last Update: 2025-12-24
+ *  - Last Update: 2025-12-30
  */
 
 using System;
@@ -50,6 +49,9 @@ using FMOD.Studio; // Studio API
 
 namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 {
+    /// <summary>
+    /// Represents the main window and orchestrates the primary logic for the FSB/BANK Extractor and Rebuilder application.
+    /// </summary>
     public partial class FSB_BANK_Extractor_Rebuilder_CS_GUI : Form
     {
         #region 1. Constants & Configuration
@@ -59,12 +61,33 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// </summary>
         public static class ImageIndex
         {
+            /// <summary>
+            /// Icon index for a generic file.
+            /// </summary>
             public const int File = 0;
+            /// <summary>
+            /// Icon index for a folder or container.
+            /// </summary>
             public const int Folder = 1;
+            /// <summary>
+            /// Icon index for an FMOD Event.
+            /// </summary>
             public const int Event = 2;
+            /// <summary>
+            /// Icon index for an FMOD Parameter.
+            /// </summary>
             public const int Param = 3;
+            /// <summary>
+            /// Icon index for an FMOD Bus.
+            /// </summary>
             public const int Bus = 4;
+            /// <summary>
+            /// Icon index for an FMOD VCA.
+            /// </summary>
             public const int Vca = 5;
+            /// <summary>
+            /// Icon index for a playable audio asset.
+            /// </summary>
             public const int Audio = 6;
         }
 
@@ -73,25 +96,109 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// </summary>
         private static class UiConstants
         {
+            // Dialog Titles and Messages
             public const string MsgCriticalError = "Critical Error";
             public const string MsgError = "Error";
             public const string MsgSuccess = "Success";
             public const string MsgInfo = "Info";
             public const string MsgWarning = "Warning";
+            public const string MsgExtractionError = "Extraction Error";
+            public const string MsgExportError = "Export Error";
+            public const string MsgRebuildError = "Rebuild Error";
+            public const string MsgToolNotFound = "Tool Not Found";
+            public const string MsgInvalidSelection = "Invalid Selection";
+            public const string MsgUnsupportedFormat = "Unsupported Format";
+            public const string TitleProgramInfo = "Program Information";
+            public const string TitleExtractionReport = "Extraction Report";
 
+            // Status Bar Messages
             public const string StatusReady = "[READY] Waiting for next operation.";
             public const string StatusInitializing = "[INITIALIZING] Preparing to load files...";
             public const string StatusPlaybackLoading = "[PLAYBACK] Loading audio stream...";
             public const string StatusExtractionCancelled = "[CANCELLED] Extraction cancelled by user.";
             public const string StatusRebuildCancelled = "[CANCELLED] Rebuild cancelled by user.";
 
+            // Menu Item Texts
             public const string MenuSelectAll = "Select All";
             public const string MenuIndexTools = "Index Tools (Select/Jump)...";
             public const string MenuLoadStrings = "Load Strings Bank (Manual)...";
+            public const string MenuRebuildManager = "Rebuild Manager...";
+            public const string MenuRebuildLegacy = "Rebuild Sound with fsbankcl...";
+            public const string MenuTools = "Tools";
+            public const string MenuAudioAnalyzer = "Audio Analyzer...";
+            public const string MenuHelp = "Help";
+            public const string MenuAbout = "About";
 
+            // Context Menu (Search Results) Texts
+            public const string CtxMenuOpenFileLocation = "Open File Location";
+            public const string CtxMenuExtractItem = "Extract This Item...";
+            public const string CtxMenuRebuildItem = "Rebuild This Item...";
+            public const string CtxMenuCopyName = "Copy Name";
+            public const string CtxMenuCopyPath = "Copy Path";
+            public const string CtxMenuCopyGuid = "Copy GUID";
+
+            // Extraction Location ComboBox Items
             public const string ExtractModeSame = "Same as source file";
             public const string ExtractModeCustom = "Custom path";
             public const string ExtractModeAsk = "Ask every time";
+
+            // Playback Button Texts
+            public const string BtnTextPause = "Pause (||)";
+            public const string BtnTextPlay = "Play (▶)";
+
+            // Label Text Formats
+            public const string LblFormatVolume = "Volume: {0}%";
+            public const string LblFormatElapsedShort = "Elapsed: {0:hh\\:mm\\:ss\\.ff}";
+            public const string LblFormatElapsedLong = "Elapsed: {0:D2}:{1:D2}:{2:D2}.{3:D2}";
+            public const string LblFormatTime = "{0:mm\\:ss\\.fff} / {1:mm\\:ss\\.fff}";
+            public const string LblFormatTimeZero = "00:00.000 / 00:00.000";
+        }
+
+        /// <summary>
+        /// Defines file and path related constants.
+        /// </summary>
+        private static class FileConstants
+        {
+            // File Dialog Filters
+            public const string FilterFmodFiles = "FMOD Files|*.bank;*.fsb";
+            public const string FilterStringsBank = "FMOD Strings Bank|*.strings.bank";
+            public const string FilterCsv = "CSV|*.csv";
+            public const string FilterWav = "WAV File|*.wav";
+
+            // File Extensions
+            public const string ExtWav = ".wav";
+
+            // Default File Name Formats
+            public const string NameFormatCsvExport = "FmodExport_{0:yyyy-MM-dd_HH-mm-ss-fff}.csv";
+            public const string NameFormatExtractionLog = "ExtractionLog_Single_{0:yyyy-MM-dd_HH-mm-ss}.log";
+            public const string NameFormatErrorLog = "ErrorLog_{0:yyyy-MM-dd_HH-mm-ss-fff}.log";
+            public const string NameFormatRebuildLog = "RebuildLog_{0:yyyy-MM-dd_HH-mm-ss}.log";
+
+            // Special Path Markers
+            public const string PathMarkerSameAsSource = "##SAME_AS_SOURCE##";
+
+            // Temporary Directory Names
+            public const string TempCleanupDirPrefix = "FsbRebuildTool_Trash_";
+            public const string TempDirName = "FsbRebuildTool";
+        }
+
+        /// <summary>
+        /// Defines constants for timers and UI controls.
+        /// </summary>
+        private static class ControlConstants
+        {
+            /// <summary>
+            /// The interval in milliseconds for the main UI update timer (approx. 30 FPS).
+            /// </summary>
+            public const int MainUpdateTimerInterval = 33;
+            /// <summary>
+            /// The delay in milliseconds for the auto-play debounce timer.
+            /// </summary>
+            public const int AutoPlayDebounceTimerInterval = 250;
+            /// <summary>
+            /// The maximum value for the playback seek bar, providing a consistent range for position calculation.
+            /// </summary>
+            public const int SeekBarMax = 1000;
         }
 
         /// <summary>
@@ -99,35 +206,82 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// </summary>
         private static class LogConstants
         {
+            /// <summary>
+            /// A standard separator line used to structure log file headers and sections.
+            /// </summary>
             public const string SeparatorLine = "================================================================";
         }
 
         /// <summary>
         /// Defines the available modes for specifying the extraction location.
         /// </summary>
-        private enum ExtractLocationMode { SameAsSource, CustomPath, AskEveryTime }
+        private enum ExtractLocationMode
+        {
+            /// <summary>
+            /// Extracts files to the same directory as the source .bank/.fsb file.
+            /// </summary>
+            SameAsSource,
+            /// <summary>
+            /// Extracts files to a user-specified custom directory.
+            /// </summary>
+            CustomPath,
+            /// <summary>
+            /// Prompts the user to select a directory for each extraction operation.
+            /// </summary>
+            AskEveryTime
+        }
 
         /// <summary>
         /// Defines the possible operational states of the application.
         /// </summary>
-        private enum ApplicationState { Idle, Loading, Extracting, Rebuilding }
+        private enum ApplicationState
+        {
+            /// <summary>
+            /// The application is idle and ready for user input.
+            /// </summary>
+            Idle,
+            /// <summary>
+            /// The application is busy loading and analyzing asset files.
+            /// </summary>
+            Loading,
+            /// <summary>
+            /// The application is actively extracting audio data to files.
+            /// </summary>
+            Extracting,
+            /// <summary>
+            /// The application is actively rebuilding an FSB container.
+            /// </summary>
+            Rebuilding
+        }
 
         /// <summary>
-        /// Defines application metadata constants for display in the 'About' dialog.
+        /// The public version number of the application.
         /// </summary>
-        public const string AppVersion = "3.3.0";
-        public const string AppLastUpdate = "2025-12-24";
+        public const string AppVersion = "3.3.1";
+        /// <summary>
+        /// The date of the last significant update to the application.
+        /// </summary>
+        public const string AppLastUpdate = "2025-12-30";
+        /// <summary>
+        /// The name or alias of the application's developer.
+        /// </summary>
         public const string AppDeveloper = "(GitHub) IZH318";
+        /// <summary>
+        /// The primary website or repository for the application.
+        /// </summary>
         public const string AppWebsite = "https://github.com/IZH318";
 
         /// <summary>
-        /// Defines FMOD API version constants for display and logging.
+        /// The version of the FMOD Core and Studio API used by the application.
         /// </summary>
         public const string FmodApiVersion = "v2.03.11";
+        /// <summary>
+        /// The specific build number of the FMOD API library.
+        /// </summary>
         public const string FmodBuildNumber = "158528";
 
         /// <summary>
-        /// Gets the full formatted FMOD version string.
+        /// Gets the full formatted FMOD version string, including the build number.
         /// </summary>
         public static string FmodFullVersion => $"{FmodApiVersion} (Build {FmodBuildNumber})";
 
@@ -136,31 +290,83 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         #region 2. Fields & State
 
         // Service and Controller instances for managing application logic.
+        /// <summary>
+        /// Manages all FMOD audio engine interactions, including initialization, playback, and resource management.
+        /// </summary>
         private readonly FmodManager _fmodManager;
+        /// <summary>
+        /// Handles the logic for extracting audio data to WAV files and exporting metadata to CSV.
+        /// </summary>
         private readonly ExtractionService _extractionService;
+        /// <summary>
+        /// Manages the complex process of rebuilding FSB containers, including workspace setup and external tool invocation.
+        /// </summary>
         private readonly RebuildService _rebuildService;
+        /// <summary>
+        /// Controls the display of detailed properties for the selected node in the details ListView.
+        /// </summary>
         private readonly DetailsViewController _detailsViewController;
+        /// <summary>
+        /// Manages search functionality, including filtering nodes and updating the search results view.
+        /// </summary>
         private readonly SearchController _searchController;
 
         // UI and data state variables.
+        /// <summary>
+        /// Stores the data object for the currently selected node in either the TreeView or search results.
+        /// </summary>
         private NodeData _currentSelection = null;
+        /// <summary>
+        /// A complete, unfiltered list of the root-level TreeNodes, serving as the master data source for searching.
+        /// </summary>
         private readonly List<TreeNode> _originalNodes = new List<TreeNode>();
 
         // Child form instances.
+        /// <summary>
+        /// Holds the instance of the Audio Analyzer form, allowing it to be reused and managed.
+        /// </summary>
         private AudioAnalyzerForm _audioAnalyzer;
 
         // Timers and diagnostics.
+        /// <summary>
+        /// A UI timer responsible for periodic updates, such as playback status.
+        /// </summary>
         private readonly System.Windows.Forms.Timer _mainUpdateTimer;
+        /// <summary>
+        /// A timer used to delay auto-play, preventing rapid playback triggers during quick selections.
+        /// </summary>
+        private readonly System.Windows.Forms.Timer _autoPlayDebounceTimer;
+        /// <summary>
+        /// A stopwatch to measure the duration of long-running operations like loading, extraction, and rebuilding.
+        /// </summary>
         private readonly Stopwatch _scanStopwatch = new Stopwatch();
 
         // Application state management.
+        /// <summary>
+        /// Tracks the current operational state of the application (e.g., Idle, Loading).
+        /// </summary>
         private ApplicationState _currentState = ApplicationState.Idle;
+        /// <summary>
+        /// A flag that indicates the application is in the process of closing, used to gracefully terminate background tasks.
+        /// </summary>
         private volatile bool _isClosing = false;
+        /// <summary>
+        /// A flag to prevent recursive firing of the TreeView's AfterCheck event during programmatic check state changes.
+        /// </summary>
         private bool _isUpdatingChecks = false;
+        /// <summary>
+        /// A flag indicating that the user is currently dragging the playback seek bar, used to prevent automatic updates.
+        /// </summary>
         private bool _isDraggingSeek = false;
 
         // Logging and path management.
+        /// <summary>
+        /// The main log writer instance used for detailed session logging during extraction or rebuilding.
+        /// </summary>
         private LogWriter _logger;
+        /// <summary>
+        /// Stores the user-defined custom path for file extractions.
+        /// </summary>
         private string _customExtractPath = string.Empty;
 
         #endregion
@@ -209,9 +415,16 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
             // Set up timers and event handlers for UI updates and interactions.
             treeViewInfo.AfterCheck += TreeViewInfo_AfterCheck;
-            _mainUpdateTimer = new System.Windows.Forms.Timer { Interval = 33 };
+
+            // Main UI update timer (approx. 30fps).
+            _mainUpdateTimer = new System.Windows.Forms.Timer { Interval = ControlConstants.MainUpdateTimerInterval };
             _mainUpdateTimer.Tick += MainUpdateTimer_Tick;
             _mainUpdateTimer.Start();
+
+            // Auto-play debounce timer (approx. 250ms delay).
+            // This prevents rapid playback triggering when scrolling or clicking quickly through the list.
+            _autoPlayDebounceTimer = new System.Windows.Forms.Timer { Interval = ControlConstants.AutoPlayDebounceTimerInterval };
+            _autoPlayDebounceTimer.Tick += AutoPlayDebounceTimer_Tick;
 
             // Configure Drag & Drop functionality for the main form.
             this.AllowDrop = true;
@@ -220,7 +433,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
             // Configure playback controls.
             trackSeek.Minimum = 0;
-            trackSeek.Maximum = 1000;
+            trackSeek.Maximum = ControlConstants.SeekBarMax;
             chkLoop.CheckedChanged += chkLoop_CheckedChanged;
 
             // Enable global key previews for shortcuts like Ctrl+F.
@@ -251,6 +464,12 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Handles the FormClosing event of the Form control.
         /// </summary>
+        /// <remarks>
+        /// This method ensures a clean shutdown by performing the following steps in order:
+        ///  1) Kill any running external processes to prevent orphans.
+        ///  2) Dispose of FMOD resources to release audio driver locks.
+        ///  3) Forcefully terminate the application process to ensure all threads are stopped.
+        /// </remarks>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="FormClosingEventArgs"/> instance containing the event data.</param>
         private void OnFormClosing(object sender, FormClosingEventArgs e)
@@ -275,8 +494,13 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
                 // Dispose of other managed resources.
                 _searchController?.Dispose();
+
+                // Stop and dispose timers.
                 _mainUpdateTimer?.Stop();
                 _mainUpdateTimer?.Dispose();
+
+                _autoPlayDebounceTimer?.Stop();
+                _autoPlayDebounceTimer?.Dispose();
             }
             catch
             {
@@ -359,12 +583,12 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             if (menuStrip1.Items[0] is ToolStripMenuItem fileMenu)
             {
                 // Create Help menu item with F1 shortcut.
-                ToolStripMenuItem helpItem = new ToolStripMenuItem("Help");
+                ToolStripMenuItem helpItem = new ToolStripMenuItem(UiConstants.MenuHelp);
                 helpItem.ShortcutKeys = Keys.F1;
                 helpItem.Click += (s, e) => ShowHelpForm();
 
                 // Create About menu item.
-                ToolStripMenuItem aboutItem = new ToolStripMenuItem("About");
+                ToolStripMenuItem aboutItem = new ToolStripMenuItem(UiConstants.MenuAbout);
                 aboutItem.Click += (s, e) => ShowAboutDialog();
 
                 // Insert the new items before the "Exit" menu item.
@@ -397,7 +621,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             // Find an existing "Tools" menu.
             foreach (ToolStripItem item in menuStrip1.Items)
             {
-                if (item.Text == "Tools")
+                if (item.Text == UiConstants.MenuTools)
                 {
                     toolsMenu = (ToolStripMenuItem)item;
                     break;
@@ -407,18 +631,18 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             // If it doesn't exist, create it.
             if (toolsMenu == null)
             {
-                toolsMenu = new ToolStripMenuItem("Tools");
+                toolsMenu = new ToolStripMenuItem(UiConstants.MenuTools);
                 menuStrip1.Items.Insert(1, toolsMenu);
             }
 
             // Add the analyzer menu item.
-            ToolStripMenuItem analyzerItem = new ToolStripMenuItem("Audio Analyzer...");
+            ToolStripMenuItem analyzerItem = new ToolStripMenuItem(UiConstants.MenuAudioAnalyzer);
             analyzerItem.Click += (s, e) => ShowAudioAnalyzer();
             toolsMenu.DropDownItems.Add(analyzerItem);
         }
 
         /// <summary>
-        /// Shows or brings to front the Audio Analyzer window.
+        /// Shows the Audio Analyzer window, creating a new instance if necessary, or brings it to the front.
         /// </summary>
         private void ShowAudioAnalyzer()
         {
@@ -491,7 +715,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     if (_scanStopwatch.IsRunning)
                     {
                         _scanStopwatch.Stop();
-                        lblElapsedTime.Text = $"Elapsed: {_scanStopwatch.Elapsed:hh\\:mm\\:ss\\.ff}";
+                        lblElapsedTime.Text = string.Format(UiConstants.LblFormatElapsedShort, _scanStopwatch.Elapsed);
                     }
                     lblStatus.Text = UiConstants.StatusReady;
                     break;
@@ -560,7 +784,31 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             if (_currentState != ApplicationState.Idle)
             {
                 TimeSpan ts = _scanStopwatch.Elapsed;
-                lblElapsedTime.Text = $"Elapsed: {ts.Hours:D2}:{ts.Minutes:D2}:{ts.Seconds:D2}.{ts.Milliseconds / 10:D2}";
+                lblElapsedTime.Text = string.Format(UiConstants.LblFormatElapsedLong, ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10);
+            }
+        }
+
+        /// <summary>
+        /// Handles the Tick event of the _autoPlayDebounceTimer control. Executes playback after the user has stopped changing selection for a short period.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        private void AutoPlayDebounceTimer_Tick(object sender, EventArgs e)
+        {
+            _autoPlayDebounceTimer.Stop();
+
+            if (_isClosing || this.IsDisposed)
+            {
+                return;
+            }
+
+            // Force stop any existing playback before starting the new one.
+            // This ensures FMOD resources are cleared and prevents "ERR_NOTREADY" during rapid switching.
+            _fmodManager.Stop();
+
+            if (_currentState == ApplicationState.Idle && chkAutoPlay.Checked && _currentSelection != null)
+            {
+                PlaySelection();
             }
         }
 
@@ -577,7 +825,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         {
             try
             {
-                using (OpenFileDialog ofd = new OpenFileDialog { Filter = "FMOD Files|*.bank;*.fsb", Multiselect = true })
+                using (OpenFileDialog ofd = new OpenFileDialog { Filter = FileConstants.FilterFmodFiles, Multiselect = true })
                 {
                     if (ofd.ShowDialog() == DialogResult.OK)
                     {
@@ -667,7 +915,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             // Step 1: Stop any current playback and reset the UI.
             // This ensures a clean state before loading new data.
             _fmodManager.Stop();
-            lblTime.Text = "00:00.000 / 00:00.000";
+            lblTime.Text = UiConstants.LblFormatTimeZero;
             _searchController.ClearSearch();
 
             // Set the application state to Loading to disable UI and show progress.
@@ -692,7 +940,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
             try
             {
-                var assetLoader = new AssetLoader(_fmodManager.StudioSystem, _fmodManager.CoreSystem, _fmodManager.SyncLock);
+                var assetLoader = new AssetLoader(_fmodManager);
                 var cts = new CancellationTokenSource();
 
                 // Set up a progress handler to receive updates from the background task.
@@ -775,13 +1023,13 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Allows the user to manually select and load a strings.bank file.
+        /// Allows the user to manually select and load a strings.bank file to resolve display names.
         /// </summary>
         private void LoadStringsBankManually()
         {
             using (OpenFileDialog ofd = new OpenFileDialog
             {
-                Filter = "FMOD Strings Bank|*.strings.bank",
+                Filter = FileConstants.FilterStringsBank,
                 Title = "Select Strings Bank (e.g. Master.strings.bank)"
             })
             {
@@ -878,17 +1126,17 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         private void UpdatePlaybackStatus()
         {
             var (isPlaying, currentPos, totalLength) = _fmodManager.GetPlaybackStatus();
-            btnPlay.Text = isPlaying ? "Pause (||)" : "Play (▶)";
+            btnPlay.Text = isPlaying ? UiConstants.BtnTextPause : UiConstants.BtnTextPlay;
 
             if (totalLength > 0)
             {
-                lblTime.Text = $"{TimeSpan.FromMilliseconds(currentPos):mm\\:ss\\.fff} / {TimeSpan.FromMilliseconds(totalLength):mm\\:ss\\.fff}";
+                lblTime.Text = string.Format(UiConstants.LblFormatTime, TimeSpan.FromMilliseconds(currentPos), TimeSpan.FromMilliseconds(totalLength));
 
                 // Update the seek bar only if the user is not actively dragging it.
                 if (!_isDraggingSeek)
                 {
-                    int newVal = (int)((float)currentPos / totalLength * 1000);
-                    trackSeek.Value = Math.Min(Math.Max(0, newVal), 1000);
+                    int newVal = (int)((float)currentPos / totalLength * ControlConstants.SeekBarMax);
+                    trackSeek.Value = Math.Min(Math.Max(0, newVal), ControlConstants.SeekBarMax);
                 }
             }
         }
@@ -984,7 +1232,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         private void trackVol_Scroll(object sender, EventArgs e)
         {
-            lblVol.Text = $"Volume: {trackVol.Value}%";
+            lblVol.Text = string.Format(UiConstants.LblFormatVolume, trackVol.Value);
             float vol = trackVol.Value / 100.0f;
             _fmodManager.SetVolume(vol);
         }
@@ -1010,7 +1258,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             if (totalLength > 0)
             {
                 // Calculate and set the new playback position.
-                uint newPos = (uint)((float)trackSeek.Value / 1000 * totalLength);
+                uint newPos = (uint)((float)trackSeek.Value / ControlConstants.SeekBarMax * totalLength);
                 _fmodManager.SetPosition(newPos);
             }
             _isDraggingSeek = false;
@@ -1096,10 +1344,10 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             copyGuidContextMenuItem.Enabled = hasGuid;
 
             // Dynamically add or find the "Rebuild Manager" menu item.
-            var managerItem = treeViewContextMenu.Items.OfType<ToolStripMenuItem>().FirstOrDefault(item => item.Text == "Rebuild Manager...");
+            var managerItem = treeViewContextMenu.Items.OfType<ToolStripMenuItem>().FirstOrDefault(item => item.Text == UiConstants.MenuRebuildManager);
             if (managerItem == null)
             {
-                managerItem = new ToolStripMenuItem("Rebuild Manager...");
+                managerItem = new ToolStripMenuItem(UiConstants.MenuRebuildManager);
                 managerItem.Click += RebuildManagerContextMenuItem_Click;
                 treeViewContextMenu.Items.Insert(4, managerItem);
             }
@@ -1108,7 +1356,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             managerItem.Enabled = (isContainer || isAudio);
 
             // Hide the legacy rebuild item.
-            var legacyRebuildItem = treeViewContextMenu.Items.OfType<ToolStripMenuItem>().FirstOrDefault(item => item.Text == "Rebuild Sound with fsbankcl...");
+            var legacyRebuildItem = treeViewContextMenu.Items.OfType<ToolStripMenuItem>().FirstOrDefault(item => item.Text == UiConstants.MenuRebuildLegacy);
             if (legacyRebuildItem != null)
             {
                 legacyRebuildItem.Visible = false;
@@ -1127,14 +1375,15 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 return;
             }
 
-            // Stop playback, update selection, and refresh the details view.
-            _fmodManager.Stop();
+            // Do NOT call Stop() immediately.
+            // The logic inside FmodManager's PlaySelectionAsync handles cleanup, and calling Stop() here
+            // can cause race conditions during rapid selection changes.
             _currentSelection = e.Node.Tag as NodeData;
             UpdateDetailsView();
         }
 
         /// <summary>
-        /// Handles the NodeMouseDoubleClick event of the treeViewInfo control.
+        // Handles the NodeMouseDoubleClick event of the treeViewInfo control.
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="TreeNodeMouseClickEventArgs"/> instance containing the event data.</param>
@@ -1199,7 +1448,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     searchMenu.Items.Add(selectAllItem);
                     searchMenu.Items.Add(new ToolStripSeparator());
 
-                    ToolStripMenuItem openLocItem = new ToolStripMenuItem("Open File Location");
+                    ToolStripMenuItem openLocItem = new ToolStripMenuItem(UiConstants.CtxMenuOpenFileLocation);
                     openLocItem.Click += (s, args) =>
                     {
                         if (targetNode != null)
@@ -1219,7 +1468,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     searchMenu.Items.Add(new ToolStripSeparator());
 
                     // Configure extraction and rebuild options.
-                    ToolStripMenuItem extractItem = new ToolStripMenuItem("Extract This Item...");
+                    ToolStripMenuItem extractItem = new ToolStripMenuItem(UiConstants.CtxMenuExtractItem);
                     if (data is AudioDataNode)
                     {
                         extractItem.Click += (s, args) =>
@@ -1234,7 +1483,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     }
                     searchMenu.Items.Add(extractItem);
 
-                    ToolStripMenuItem rebuildItem = new ToolStripMenuItem("Rebuild This Item...");
+                    ToolStripMenuItem rebuildItem = new ToolStripMenuItem(UiConstants.CtxMenuRebuildItem);
                     if (data is AudioDataNode)
                     {
                         rebuildItem.Click += (s, args) =>
@@ -1251,15 +1500,15 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     searchMenu.Items.Add(new ToolStripSeparator());
 
                     // Configure "Copy" options.
-                    ToolStripMenuItem copyName = new ToolStripMenuItem("Copy Name");
+                    ToolStripMenuItem copyName = new ToolStripMenuItem(UiConstants.CtxMenuCopyName);
                     copyName.Click += (s, args) => Clipboard.SetText(targetNode != null ? targetNode.Text : targetItem.Text);
                     searchMenu.Items.Add(copyName);
 
-                    ToolStripMenuItem copyPath = new ToolStripMenuItem("Copy Path");
+                    ToolStripMenuItem copyPath = new ToolStripMenuItem(UiConstants.CtxMenuCopyPath);
                     copyPath.Click += (s, args) => Clipboard.SetText(targetNode != null ? targetNode.FullPath : targetItem.SubItems[3].Text);
                     searchMenu.Items.Add(copyPath);
 
-                    ToolStripMenuItem copyGuid = new ToolStripMenuItem("Copy GUID");
+                    ToolStripMenuItem copyGuid = new ToolStripMenuItem(UiConstants.CtxMenuCopyGuid);
                     bool hasGuid = false;
                     if (data is EventNode eventNode && eventNode.EventObject.isValid())
                     {
@@ -1428,12 +1677,19 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
             // Set the total length in the FMOD manager and update the time label.
             _fmodManager.SetCurrentTotalLength(len);
-            lblTime.Text = $"00:00.000 / {TimeSpan.FromMilliseconds(len):mm\\:ss\\.fff}";
+            lblTime.Text = string.Format(UiConstants.LblFormatTime, TimeSpan.FromMilliseconds(0), TimeSpan.FromMilliseconds(len));
 
             // Automatically start playback if the auto-play option is enabled.
+            // This is implemented with a debounce timer to handle rapid selection changes gracefully.
             if (chkAutoPlay.Checked)
             {
-                PlaySelection();
+                // Reset the timer to delay playback until the selection has settled.
+                _autoPlayDebounceTimer.Stop();
+                _autoPlayDebounceTimer.Start();
+            }
+            else
+            {
+                _autoPlayDebounceTimer.Stop();
             }
         }
 
@@ -1457,8 +1713,8 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 }
 
                 // Prompt the user for a save location.
-                string defaultName = $"FmodExport_{DateTime.Now:yyyy-MM-dd_HH-mm-ss-fff}.csv";
-                using (SaveFileDialog sfd = new SaveFileDialog { Filter = "CSV|*.csv", FileName = defaultName })
+                string defaultName = string.Format(FileConstants.NameFormatCsvExport, DateTime.Now);
+                using (SaveFileDialog sfd = new SaveFileDialog { Filter = FileConstants.FilterCsv, FileName = defaultName })
                 {
                     if (sfd.ShowDialog() == DialogResult.OK)
                     {
@@ -1473,7 +1729,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, $"An unexpected error occurred while exporting to CSV: {ex.Message}", "Export Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, $"An unexpected error occurred while exporting to CSV: {ex.Message}", UiConstants.MsgExportError, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 RestoreUiAfterError();
             }
         }
@@ -1491,7 +1747,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, $"An unexpected error occurred during extraction: {ex.Message}", "Extraction Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, $"An unexpected error occurred during extraction: {ex.Message}", UiConstants.MsgExtractionError, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 RestoreUiAfterError();
             }
         }
@@ -1509,7 +1765,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, $"An unexpected error occurred during extraction: {ex.Message}", "Extraction Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, $"An unexpected error occurred during extraction: {ex.Message}", UiConstants.MsgExtractionError, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 RestoreUiAfterError();
             }
         }
@@ -1571,7 +1827,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Determines the base extraction path based on the user's selected mode.
         /// </summary>
-        /// <returns>A task that represents the asynchronous operation. The task result contains the selected base path, or a special marker for "Same as Source".</returns>
+        /// <returns>A task that represents the asynchronous operation. The task result contains the selected base path, a special marker for "Same as Source", or null if the operation was cancelled.</returns>
         private async Task<string> GetBasePathForExtractionAsync()
         {
             var selectedMode = (ExtractLocationMode)cmbExtractLocation.SelectedIndex;
@@ -1617,7 +1873,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
                 case ExtractLocationMode.SameAsSource:
                     // Return a special marker to indicate this mode.
-                    return "##SAME_AS_SOURCE##";
+                    return FileConstants.PathMarkerSameAsSource;
             }
 
             // If the user canceled the folder selection, return null.
@@ -1691,7 +1947,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
             // Determine the root path for the final report message.
             string reportRootPath = userSelectedPath;
-            if (reportRootPath == "##SAME_AS_SOURCE##")
+            if (reportRootPath == FileConstants.PathMarkerSameAsSource)
             {
                 if (extractList.Count > 0 && extractList[0].Tag is AudioDataNode firstData)
                 {
@@ -1750,13 +2006,13 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                                    $"Output Location:\n{reportRootPath}";
 
             MessageBoxIcon icon = failCount > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information;
-            MessageBox.Show(reportMessage, "Extraction Report", MessageBoxButtons.OK, icon);
+            MessageBox.Show(reportMessage, UiConstants.TitleExtractionReport, MessageBoxButtons.OK, icon);
 
             SetApplicationState(ApplicationState.Idle);
         }
 
         /// <summary>
-        /// Recursively finds all audio nodes that are checked.
+        /// Recursively finds all audio nodes, optionally filtering by their checked state.
         /// </summary>
         /// <param name="nodes">The collection of nodes to search through.</param>
         /// <param name="foundNodes">A list to store the found audio nodes.</param>
@@ -1871,6 +2127,15 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Handles the Click event of the extractContextMenuItem control.
         /// </summary>
+        /// <remarks>
+        /// Processing steps for single file extraction:
+        ///  1) Verify that a valid audio node is selected.
+        ///  2) Prompt the user for a save file path.
+        ///  3) Initialize the UI state and a verbose logger if enabled.
+        ///  4) Execute the asynchronous extraction via ExtractionService.
+        ///  5) Process the result, log details, and provide user feedback.
+        ///  6) Handle any exceptions and ensure final cleanup.
+        /// </remarks>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         private async void extractContextMenuItem_Click(object sender, EventArgs e)
@@ -1882,16 +2147,16 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
             try
             {
-                // Verify that the selection is valid and contains audio data before proceeding.
+                // Step 1: Verify that the selection is valid and contains audio data before proceeding.
                 if (selectedNode?.Tag is AudioDataNode data)
                 {
-                    // Open a Save File Dialog to define the output path for the WAV file.
+                    // Step 2: Open a Save File Dialog to define the output path for the WAV file.
                     using (var sfd = new SaveFileDialog())
                     {
                         // Set default file name and filters for the dialog.
                         sfd.Title = "Save Audio File";
-                        sfd.Filter = "WAV File|*.wav";
-                        sfd.FileName = Utilities.SanitizeFileName(selectedNode.Text) + ".wav";
+                        sfd.Filter = FileConstants.FilterWav;
+                        sfd.FileName = Utilities.SanitizeFileName(selectedNode.Text) + FileConstants.ExtWav;
 
                         // If the user confirms the save path.
                         if (sfd.ShowDialog() == DialogResult.OK)
@@ -1900,14 +2165,14 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                             string outputDir = Path.GetDirectoryName(finalFilePath);
                             string soundName = data.CachedAudio.Name;
 
-                            // Transition the application to the Extracting state to sync UI and start the global stopwatch.
+                            // Step 3: Transition the application to the Extracting state and initialize logging.
                             _fmodManager.Stop();
                             SetApplicationState(ApplicationState.Extracting);
 
                             // Initialize the detailed session logger if enabled.
                             if (chkVerboseLog.Checked)
                             {
-                                string logFile = Path.Combine(outputDir, $"ExtractionLog_Single_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
+                                string logFile = Path.Combine(outputDir, string.Format(FileConstants.NameFormatExtractionLog, DateTime.Now));
                                 localLogger = new LogWriter(logFile);
 
                                 // Write the standard log header for session identification.
@@ -1936,8 +2201,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                                     return;
                                 }
 
-                                // Construct a detailed status string: [Item Name] | [MB Progress] | [Percentage]
-                                // Example: [EXTRACTING] BGM_01 | 1.19 MB / 33.96 MB (3%)
+                                // Construct a detailed status string for clarity.
                                 string detailedStatus = $"[EXTRACTING] {soundName} | {report.Status} ({report.Percentage}%)";
                                 lblStatus.Text = detailedStatus;
 
@@ -1949,21 +2213,26 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                                 }
                             });
 
-                            // Start the extraction process asynchronously on a background thread.
+                            // Step 4: Start the extraction process asynchronously on a background thread.
                             Stopwatch sw = Stopwatch.StartNew();
                             long bytesWritten = await _extractionService.ExtractSingleWavAsync(data.CachedAudio, finalFilePath, progressHandler);
                             sw.Stop();
 
-                            // Process the result and provide final feedback to the user.
+                            // Step 5: Process the result and provide final feedback to the user.
                             if (bytesWritten >= 0)
                             {
                                 // Log technical metadata if verbose logging is active.
                                 if (localLogger != null)
                                 {
                                     var details = data.GetDetails();
+
+                                    // This local function safely extracts a specific detail value from a list.
+                                    // It prevents repetitive code and handles cases where a detail might be missing.
+                                    // - group: The category of the detail (e.g., "Format").
+                                    // - propName: The name of the property to find (e.g., "Encoding").
+                                    // - Returns: The found value as a string, or "N/A" if not found.
                                     string GetDetailValue(string group, string propName)
                                     {
-                                        // Refactored from complex one-liner to readable method for compliance.
                                         var foundDetail = details.FirstOrDefault(d => d.Key.Equals(group, StringComparison.OrdinalIgnoreCase) && d.Value.StartsWith(propName, StringComparison.OrdinalIgnoreCase));
                                         if (foundDetail.Equals(default(KeyValuePair<string, string>)))
                                         {
@@ -1990,7 +2259,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                                 }
 
                                 // Set a final summary status message on the bar.
-                                double fileSizeMb = bytesWritten / 1048576.0;
+                                double fileSizeMb = bytesWritten / AppConstants.BytesToMegabytes;
                                 lblStatus.Text = $"[COMPLETE] {soundName} | {fileSizeMb:F2} MB saved in {sw.Elapsed.TotalSeconds:F2}s";
 
                                 // Show a modal completion message to the user.
@@ -2008,15 +2277,18 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             }
             catch (Exception ex)
             {
-                // Capture and log any unexpected errors during the process.
-                localLogger?.WriteRaw($"[ERROR] An exception occurred: {ex.Message}\n{ex.StackTrace}");
+                // Step 6: Capture and log any unexpected errors during the process.
+                if (localLogger != null)
+                {
+                    localLogger.WriteRaw($"[ERROR] An exception occurred: {ex.Message}\n{ex.StackTrace}");
+                }
 
                 string context = $"Single file extraction of '{(selectedNode != null ? selectedNode.FullPath : "Unknown")}' to '{(string.IsNullOrEmpty(finalFilePath) ? "N/A" : finalFilePath)}'";
                 string logFilePath = await LogOperationErrorAsync("Single File Extraction", new[] { (context, ex) });
 
                 string userMessage = "An unexpected error occurred during extraction.\n\n" +
                                         $"Technical details have been saved to the log file:\n{Path.GetFileName(logFilePath)}";
-                MessageBox.Show(this, userMessage, "Extraction Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, userMessage, UiConstants.MsgExtractionError, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -2042,7 +2314,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             // Check if the required external tool exists.
             if (!File.Exists(AppConstants.FsBankExecutable))
             {
-                MessageBox.Show($"Rebuild tool '{AppConstants.FsBankExecutable}' not found in the application directory.\nPlease place it alongside the extractor.", "Tool Not Found", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Rebuild tool '{AppConstants.FsBankExecutable}' not found in the application directory.\nPlease place it alongside the extractor.", UiConstants.MsgToolNotFound, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
@@ -2089,7 +2361,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             char fsbVersion = Utilities.GetFsbVersion(refNodeData.CachedAudio.SourcePath, refNodeData.FsbChunkOffset);
             if (fsbVersion != '5')
             {
-                MessageBox.Show($"Rebuilding is only supported for FSB5 format files.\nThe selected container appears to be FSB version '{fsbVersion}'.", "Unsupported Format", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show($"Rebuilding is only supported for FSB5 format files.\nThe selected container appears to be FSB version '{fsbVersion}'.", UiConstants.MsgUnsupportedFormat, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -2123,7 +2395,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     }
 
                     // Prompt for save location and execute the rebuild process.
-                    using (SaveFileDialog sfd = new SaveFileDialog { Filter = "FMOD Files|*.bank;*.fsb", FileName = bankName })
+                    using (SaveFileDialog sfd = new SaveFileDialog { Filter = FileConstants.FilterFmodFiles, FileName = bankName })
                     {
                         if (sfd.ShowDialog(this) == DialogResult.OK)
                         {
@@ -2168,7 +2440,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 try
                 {
                     string outputDir = Path.GetDirectoryName(savePath);
-                    string logFileName = $"RebuildLog_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log";
+                    string logFileName = string.Format(FileConstants.NameFormatRebuildLog, DateTime.Now);
                     string logPath = Path.Combine(outputDir, logFileName);
                     _logger = new LogWriter(logPath);
 
@@ -2197,7 +2469,16 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             }
 
             // Define a local handler for the log event to ensure proper subscription and unsubscription.
-            Action<string> onLogReceived = (msg) => _logger?.WriteRaw(msg);
+            Action<string> onLogReceived = (msg) =>
+            {
+                // This handler is now the single point of responsibility for formatting
+                // all log messages with a timestamp before writing them to the file.
+                if (_logger != null)
+                {
+                    string formattedMessage = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | {msg}";
+                    _logger.WriteRawNoTimestamp(formattedMessage);
+                }
+            };
 
             // Subscribe to the log event to capture detailed logs from the service.
             if (_logger != null)
@@ -2283,12 +2564,11 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             {
                 // Catch any critical exceptions during the rebuild process and log the error.
                 string logFile = await LogOperationErrorAsync("Rebuild Process", new[] { ("Batch Operation", ex) });
-                MessageBox.Show($"A critical error occurred during the rebuild process.\n\nDetails have been saved to:\n{logFile}", "Rebuild Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"A critical error occurred during the rebuild process.\n\nDetails have been saved to:\n{logFile}", UiConstants.MsgRebuildError, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
                 // Step 4: Finalize and cleanup.
-
                 // Unsubscribe from the log event to prevent memory leaks.
                 if (_logger != null)
                 {
@@ -2304,15 +2584,22 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     }
                     catch (Exception cleanupEx)
                     {
+                        // Silently ignore cleanup errors to prevent issues if a file is locked or permissions are denied.
                         System.Diagnostics.Debug.WriteLine($"Failed to clean up workspace '{result.WorkspacePath}': {cleanupEx.Message}");
                     }
                 }
 
                 // Force garbage collection to release memory used by large byte arrays during the build.
-                _logger?.WriteRaw("[INFO] Forcing garbage collection to release memory...");
+                if (_logger != null)
+                {
+                    _logger.WriteRaw("[INFO] Forcing garbage collection to release memory...");
+                }
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
-                _logger?.WriteRaw("[INFO] Memory released.");
+                if (_logger != null)
+                {
+                    _logger.WriteRaw("[INFO] Memory released.");
+                }
 
                 // Update the UI based on the final result of the operation.
                 progressBar.Value = success ? progressBar.Maximum : 0;
@@ -2363,7 +2650,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             if (!isValidContainer)
             {
                 MessageBox.Show("Please select a file/folder that directly contains audio files.\n(e.g., an FSB node or a Bank node with audio)",
-                    "Invalid Selection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    UiConstants.MsgInvalidSelection, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -2532,7 +2819,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 $"Website: {AppWebsite}\n\n" +
                 $"Using FMOD Studio API version {FmodApiVersion}\n" +
                 $" - Studio API minor release (build {FmodBuildNumber})\n\n" +
-                $"© {copyrightYear} {AppDeveloper}. All rights reserved.", "Program Information");
+                $"© {copyrightYear} {AppDeveloper}. All rights reserved.", UiConstants.TitleProgramInfo);
         }
 
         /// <summary>
@@ -2543,7 +2830,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <returns>A task that represents the asynchronous operation. The task result contains the path to the log file.</returns>
         private async Task<string> LogOperationErrorAsync(string operationName, IEnumerable<(string Context, Exception ex)> failedItems)
         {
-            string logFileName = $"ErrorLog_{DateTime.Now:yyyy-MM-dd_HH-mm-ss-fff}.log";
+            string logFileName = string.Format(FileConstants.NameFormatErrorLog, DateTime.Now);
             string logFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, logFileName);
             var sb = new StringBuilder();
 
@@ -2610,17 +2897,17 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Cleans up temporary files left over from previous application sessions.
+        /// Cleans up temporary files and directories left over from previous application sessions.
         /// </summary>
         private void CleanupOrphanedTempFiles()
         {
             string tempPath = Path.GetTempPath();
-            string targetDir = Path.Combine(tempPath, "FsbRebuildTool");
+            string targetDir = Path.Combine(tempPath, FileConstants.TempDirName);
 
             // Quickly move the old directory to a "trash" location to avoid blocking startup.
             if (Directory.Exists(targetDir))
             {
-                string newTrashDir = Path.Combine(tempPath, $"FsbRebuildTool_Trash_{Guid.NewGuid()}");
+                string newTrashDir = Path.Combine(tempPath, $"{FileConstants.TempCleanupDirPrefix}{Guid.NewGuid()}");
                 try
                 {
                     Directory.Move(targetDir, newTrashDir);
@@ -2636,7 +2923,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             {
                 try
                 {
-                    string[] trashFolders = Directory.GetDirectories(tempPath, "FsbRebuildTool_Trash_*");
+                    string[] trashFolders = Directory.GetDirectories(tempPath, $"{FileConstants.TempCleanupDirPrefix}*");
 
                     foreach (string trash in trashFolders)
                     {

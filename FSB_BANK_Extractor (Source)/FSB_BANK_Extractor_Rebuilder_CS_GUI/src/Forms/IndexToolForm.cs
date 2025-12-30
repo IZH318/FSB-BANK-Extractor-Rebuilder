@@ -15,7 +15,7 @@
  *
  * Technical Environment:
  *  - Target Framework: .NET Framework 4.8
- *  - Last Update: 2025-12-24
+ *  - Last Update: 2025-12-30
  */
 
 using System;

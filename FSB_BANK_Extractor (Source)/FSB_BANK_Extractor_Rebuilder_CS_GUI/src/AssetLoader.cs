@@ -13,14 +13,15 @@
  *  - Asynchronous Loading: Performs all file I/O and parsing on background threads to prevent UI freezing.
  *  - Parallel Analysis: Utilizes parallel processing to scan multiple files concurrently.
  *  - Hybrid Parsing Engine: Dispatches parsing logic between FMOD API (FSB5) and manual binary reading (FSB3/4).
+ *  - Pre-Caching Strategy: Keeps FMOD container handles open after analysis and registers them with FmodManager
+ *    to ensure instant playback without re-parsing headers.
  *  - Recursive Discovery: Scans directories recursively to find all compatible audio containers.
- *  - Structural Marshaling: Uses defined structs to safely read legacy binary formats.
  *
  * Technical Environment:
  *  - FMOD Engine Version: v2.03.11
  *  - Target Framework: .NET Framework 4.8
  *  - Architecture: Any CPU (Optimized for x64)
- *  - Last Update: 2025-01-08
+ *  - Last Update: 2025-12-30
  */
 
 using System;
@@ -46,10 +47,48 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         #region 1. Constants & Fields
 
         /// <summary>
+        /// Defines file extensions and search patterns used for asset discovery.
+        /// These are centralized to ensure consistency across the application.
+        /// </summary>
+        private static class FilePatterns
+        {
+            /// <summary>
+            /// File extension for FMOD Bank files, used to identify primary containers.
+            /// </summary>
+            public const string BankExtension = ".bank";
+
+            /// <summary>
+            /// File extension for FMOD Sound Bank files, used to identify audio-only containers.
+            /// </summary>
+            public const string FsbExtension = ".fsb";
+
+            /// <summary>
+            /// File extension for FMOD Strings Bank files, which contain metadata for resolving names.
+            /// </summary>
+            public const string StringsBankExtension = ".strings.bank";
+
+            /// <summary>
+            /// Search pattern for discovering FMOD Strings Bank files within directories.
+            /// </summary>
+            public const string StringsBankSearchPattern = "*.strings.bank";
+
+            /// <summary>
+            /// Search pattern for discovering primary FMOD Bank files within directories.
+            /// </summary>
+            public const string BankSearchPattern = "*.bank";
+
+            /// <summary>
+            /// Search pattern for discovering FMOD Sound Bank files within directories.
+            /// </summary>
+            public const string FsbSearchPattern = "*.fsb";
+        }
+
+        /// <summary>
         /// Defines the maximum number of threads to use when analyzing files in parallel.
         /// </summary>
         /// <remarks>
-        /// Limiting this to the processor count avoids context switching overhead, although I/O is often the bottleneck.
+        /// Limiting this to the processor count avoids excessive context switching overhead, although I/O is often the bottleneck.
+        /// This value is determined at startup and is not configurable at runtime.
         /// </remarks>
         private static readonly int MAX_PARALLEL_FILES = Environment.ProcessorCount;
 
@@ -59,22 +98,62 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         private const int MIN_HEADER_CHECK_SIZE = 32;
 
         /// <summary>
-        /// Defines the default sample rate to use if the legacy header specifies zero.
+        /// Defines the default sample rate to use if a legacy header specifies zero, preventing division-by-zero errors.
         /// </summary>
         private const int DEFAULT_FREQUENCY = 44100;
 
         /// <summary>
-        /// Defines the buffer size for retrieving internal FMOD names.
+        /// Defines the buffer size for retrieving internal FMOD names, preventing buffer overflows.
         /// </summary>
         private const int MAX_NAME_BUFFER = 256;
 
         /// <summary>
-        /// The FMOD Studio System instance for high-level operations.
+        /// Represents the character identifier for the first byte 'F' of the FSB signature.
+        /// </summary>
+        private const char FSB_SIG_CHAR_1 = 'F';
+
+        /// <summary>
+        /// Represents the character identifier for the second byte 'S' of the FSB signature.
+        /// </summary>
+        private const char FSB_SIG_CHAR_2 = 'S';
+
+        /// <summary>
+        /// Represents the character identifier for the third byte 'B' of the FSB signature.
+        /// </summary>
+        private const char FSB_SIG_CHAR_3 = 'B';
+
+        /// <summary>
+        /// Represents the character identifier for FSB version 5.
+        /// </summary>
+        private const char FSB_VERSION_5 = '5';
+
+        /// <summary>
+        /// Represents the character identifier for FSB version 4.
+        /// </summary>
+        private const char FSB_VERSION_4 = '4';
+
+        /// <summary>
+        /// Represents the character identifier for FSB version 3.
+        /// </summary>
+        private const char FSB_VERSION_3 = '3';
+
+        /// <summary>
+        /// Represents the character identifier for FSB version 1.
+        /// </summary>
+        private const char FSB_VERSION_1 = '1';
+
+        /// <summary>
+        /// The FmodManager instance used to register cached containers and access FMOD systems.
+        /// </summary>
+        private readonly FmodManager _fmodManager;
+
+        /// <summary>
+        /// The FMOD Studio System instance for high-level operations like loading banks.
         /// </summary>
         private readonly FMOD.Studio.System _studioSystem;
 
         /// <summary>
-        /// The FMOD Core System instance for low-level audio processing.
+        /// The FMOD Core System instance for low-level audio processing like creating sounds.
         /// </summary>
         private readonly FMOD.System _coreSystem;
 
@@ -84,7 +163,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         private readonly object _fmodLock;
 
         /// <summary>
-        /// A volatile flag to signal that the application is closing, used for graceful cancellation.
+        /// A volatile flag to signal that the application is closing, used for graceful cancellation of long-running tasks.
         /// </summary>
         private volatile bool _isClosing = false;
 
@@ -95,14 +174,15 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Initializes a new instance of the <see cref="AssetLoader"/> class.
         /// </summary>
-        /// <param name="studioSystem">The shared FMOD Studio System instance.</param>
-        /// <param name="coreSystem">The shared FMOD Core System instance.</param>
-        /// <param name="syncLock">The synchronization object for thread-safe FMOD calls.</param>
-        public AssetLoader(FMOD.Studio.System studioSystem, FMOD.System coreSystem, object syncLock)
+        /// <param name="fmodManager">
+        /// The central FmodManager instance. Must not be null. This loader relies on it for FMOD system access and asset caching.
+        /// </param>
+        public AssetLoader(FmodManager fmodManager)
         {
-            _studioSystem = studioSystem;
-            _coreSystem = coreSystem;
-            _fmodLock = syncLock;
+            _fmodManager = fmodManager;
+            _studioSystem = fmodManager.StudioSystem;
+            _coreSystem = fmodManager.CoreSystem;
+            _fmodLock = fmodManager.SyncLock;
         }
 
         #endregion
@@ -112,14 +192,6 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Asynchronously loads and analyzes all FMOD assets from the specified input paths.
         /// </summary>
-        /// <param name="inputPaths">An enumerable collection of file and/or directory paths to scan.</param>
-        /// <param name="progress">An IProgress provider to report status and percentage updates to the UI.</param>
-        /// <param name="token">A CancellationToken to signal when the operation should be aborted.</param>
-        /// <returns>
-        /// A task that represents the asynchronous operation. The task result is a tuple containing:
-        /// - A list of root <see cref="TreeNode"/> objects representing the loaded assets.
-        /// - A thread-safe bag of tuples, each containing a file path that failed to load and the associated exception.
-        /// </returns>
         /// <remarks>
         /// Processing steps:
         ///  1) Unload all previously loaded banks to ensure a clean state.
@@ -128,6 +200,14 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         ///  4) Run the main analysis loop on a background thread using parallel processing.
         ///  5) Perform final logical post-processing and update the UI structure.
         /// </remarks>
+        /// <param name="inputPaths">An enumerable collection of file and/or directory paths to scan. Must not be null.</param>
+        /// <param name="progress">An IProgress provider to report status and percentage updates to the UI. Can be null.</param>
+        /// <param name="token">A CancellationToken to signal when the operation should be aborted.</param>
+        /// <returns>
+        /// A task that represents the asynchronous operation. The task result is a tuple where:
+        /// - `Nodes` is a list of root <see cref="TreeNode"/> objects ready for UI display.
+        /// - `FailedFiles` is a thread-safe bag collecting all file paths and exceptions that occurred during processing, for later reporting.
+        /// </returns>
         public async Task<(List<TreeNode> Nodes, ConcurrentBag<(string FilePath, Exception ex)> FailedFiles)> LoadAssetsAsync(
             IEnumerable<string> inputPaths,
             IProgress<ProgressReport> progress,
@@ -142,6 +222,9 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             {
                 _studioSystem.unloadAll();
             }
+
+            // Explicitly clear the FmodManager cache since we are starting a new session.
+            _fmodManager.ClearCache();
 
             progress?.Report(new ProgressReport("[SCANNING] Discovering files in selected paths...", 2));
 
@@ -183,7 +266,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     {
                         token.ThrowIfCancellationRequested();
 
-                        // Thread-safe counter increment.
+                        // Use an atomic operation for thread-safe counter incrementation.
                         int currentFileIndex = Interlocked.Increment(ref processedFilesCount);
                         string fileName = Path.GetFileName(filePath);
 
@@ -204,11 +287,11 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                             TreeNode rootNode = new TreeNode(fileName, FSB_BANK_Extractor_Rebuilder_CS_GUI.ImageIndex.File, FSB_BANK_Extractor_Rebuilder_CS_GUI.ImageIndex.File);
                             string ext = Path.GetExtension(filePath).ToLower();
 
-                            if (ext == ".bank")
+                            if (ext == FilePatterns.BankExtension)
                             {
                                 AnalyzeBankFile(filePath, rootNode, singleFileProgress);
                             }
-                            else if (ext == ".fsb")
+                            else if (ext == FilePatterns.FsbExtension)
                             {
                                 AnalyzeFsbFile(filePath, rootNode, singleFileProgress);
                             }
@@ -241,7 +324,10 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
             foreach (TreeNode node in nodesList)
             {
-                if (_isClosing) break;
+                if (_isClosing)
+                {
+                    break;
+                }
                 if (node.Tag is BankNode data)
                 {
                     AnalyzeBankLogic(data.ExtraInfo, node);
@@ -256,11 +342,11 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         #region 4. File Discovery & Analysis Workflow
 
         /// <summary>
-        /// Discovers content files (.bank, .fsb) and strings banks from a list of input paths.
+        /// Asynchronously discovers all content files (.bank, .fsb) and strings banks from a given set of input paths.
         /// </summary>
-        /// <param name="inputPaths">A collection of file and directory paths.</param>
-        /// <param name="failedFiles">A concurrent bag to store paths that could not be accessed.</param>
-        /// <returns>A tuple containing a list of content files and a list of strings banks.</returns>
+        /// <param name="inputPaths">A collection of file and directory paths to scan.</param>
+        /// <param name="failedFiles">A concurrent bag to which any file or directory access exceptions will be added.</param>
+        /// <returns>A task that resolves to a tuple containing a distinct list of content files and a distinct list of strings banks.</returns>
         private async Task<(List<string> contentFiles, List<string> stringsBanks)> DiscoverFilesAsync(IEnumerable<string> inputPaths, ConcurrentBag<(string FilePath, Exception ex)> failedFiles)
         {
             var allStringsBanks = new List<string>();
@@ -270,15 +356,19 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             {
                 foreach (string path in inputPaths)
                 {
-                    if (_isClosing) break;
+                    if (_isClosing)
+                    {
+                        break;
+                    }
 
                     if (Directory.Exists(path))
                     {
                         try
                         {
-                            allStringsBanks.AddRange(Directory.GetFiles(path, "*.strings.bank", SearchOption.AllDirectories));
-                            allContentFiles.AddRange(Directory.GetFiles(path, "*.bank", SearchOption.AllDirectories));
-                            allContentFiles.AddRange(Directory.GetFiles(path, "*.fsb", SearchOption.AllDirectories));
+                            // Recursively find all supported file types in the directory.
+                            allStringsBanks.AddRange(Directory.GetFiles(path, FilePatterns.StringsBankSearchPattern, SearchOption.AllDirectories));
+                            allContentFiles.AddRange(Directory.GetFiles(path, FilePatterns.BankSearchPattern, SearchOption.AllDirectories));
+                            allContentFiles.AddRange(Directory.GetFiles(path, FilePatterns.FsbSearchPattern, SearchOption.AllDirectories));
                         }
                         catch (Exception ex)
                         {
@@ -287,12 +377,13 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     }
                     else if (File.Exists(path))
                     {
+                        // Classify the single file path provided.
                         string name = Path.GetFileName(path).ToLower();
-                        if (name.EndsWith(".strings.bank"))
+                        if (name.EndsWith(FilePatterns.StringsBankExtension))
                         {
                             allStringsBanks.Add(path);
                         }
-                        else if (name.EndsWith(".bank") || name.EndsWith(".fsb"))
+                        else if (name.EndsWith(FilePatterns.BankExtension) || name.EndsWith(FilePatterns.FsbExtension))
                         {
                             allContentFiles.Add(path);
                         }
@@ -300,21 +391,25 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 }
             });
 
+            // Return distinct lists, ensuring strings banks are not duplicated in the content list.
             return (
-                allContentFiles.Where(f => !f.ToLower().EndsWith(".strings.bank")).Distinct().ToList(),
+                allContentFiles.Where(f => !f.ToLower().EndsWith(FilePatterns.StringsBankExtension)).Distinct().ToList(),
                 allStringsBanks.Distinct().ToList()
             );
         }
 
         /// <summary>
-        /// Analyzes a .bank file by scanning for embedded FSB data chunks.
+        /// Analyzes a .bank file by scanning for embedded FSB data chunks and creating a hierarchical node structure.
         /// </summary>
         /// <param name="path">The full path to the .bank file.</param>
-        /// <param name="root">The parent <see cref="TreeNode"/> for this bank.</param>
-        /// <param name="progressReporter">A delegate for reporting progress updates.</param>
+        /// <param name="root">The parent <see cref="TreeNode"/> to which child FSB nodes will be added.</param>
+        /// <param name="progressReporter">A delegate for reporting detailed progress updates to the caller.</param>
         private void AnalyzeBankFile(string path, TreeNode root, Action<string, int> progressReporter)
         {
-            if (_isClosing) return;
+            if (_isClosing)
+            {
+                return;
+            }
 
             root.Tag = new BankNode(path);
             var fsbOffsets = new List<uint>();
@@ -326,7 +421,10 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
                     // If the file is smaller than the overlap size, reliable scanning is not possible.
-                    if (fs.Length < FsbSpecs.ScanOverlapSize) return;
+                    if (fs.Length < FsbSpecs.ScanOverlapSize)
+                    {
+                        return;
+                    }
 
                     byte[] buffer = new byte[AppConstants.BufferSizeLarge];
                     int bytesRead;
@@ -341,7 +439,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                         for (int i = 0; i < scanLimit; i++)
                         {
                             // Check for 'F', 'S', 'B' sequence.
-                            if (buffer[i] == 'F' && buffer[i + 1] == 'S' && buffer[i + 2] == 'B')
+                            if (buffer[i] == FSB_SIG_CHAR_1 && buffer[i + 1] == FSB_SIG_CHAR_2 && buffer[i + 2] == FSB_SIG_CHAR_3)
                             {
                                 if (IsValidFsbHeader(buffer, i))
                                 {
@@ -366,7 +464,10 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             }
 
             progressReporter($"[ANALYZING] Found {fsbOffsets.Count} potential FSB chunk(s). Validating...", 30);
-            if (fsbOffsets.Count == 0) return;
+            if (fsbOffsets.Count == 0)
+            {
+                return;
+            }
 
             var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             int fsbCounter = 0;
@@ -388,11 +489,11 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                         : $"{Path.GetFileNameWithoutExtension(path)}_{offset:X}";
 
                     // Ensure unique names for UI display.
-                    string finalName = baseName + ".fsb";
+                    string finalName = baseName + FilePatterns.FsbExtension;
                     int dupeCounter = 1;
                     while (usedNames.Contains(finalName))
                     {
-                        finalName = $"{baseName}_{dupeCounter++}.fsb";
+                        finalName = $"{baseName}_{dupeCounter++}{FilePatterns.FsbExtension}";
                     }
                     usedNames.Add(finalName);
 
@@ -408,55 +509,72 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Validates if the data at a given buffer index represents a valid FSB header.
+        /// Validates if the byte sequence at a given buffer index represents a valid FSB header.
         /// </summary>
-        /// <param name="buffer">The byte buffer containing the potential header data.</param>
-        /// <param name="index">The starting index of the "FSB" signature in the buffer.</param>
-        /// <returns><c>true</c> if the header is valid; otherwise, <c>false</c>.</returns>
+        /// <param name="buffer">The byte buffer containing the potential header.</param>
+        /// <param name="index">The starting index of the 'FSB' signature in the buffer.</param>
+        /// <returns><c>true</c> if the header appears valid; otherwise, <c>false</c>.</returns>
         private bool IsValidFsbHeader(byte[] buffer, int index)
         {
             try
             {
                 // Ensure there is enough data in the buffer to read a minimal header.
-                if (index + MIN_HEADER_CHECK_SIZE > buffer.Length) return false;
+                if (index + MIN_HEADER_CHECK_SIZE > buffer.Length)
+                {
+                    return false;
+                }
 
                 // Double-check signature.
-                if (buffer[index] != 'F' || buffer[index + 1] != 'S' || buffer[index + 2] != 'B') return false;
+                if (buffer[index] != FSB_SIG_CHAR_1 || buffer[index + 1] != FSB_SIG_CHAR_2 || buffer[index + 2] != FSB_SIG_CHAR_3)
+                {
+                    return false;
+                }
 
                 byte versionChar = buffer[index + 3];
 
-                if (versionChar == '5')
+                if (versionChar == FSB_VERSION_5)
                 {
                     int numSamples = BitConverter.ToInt32(buffer, index + FsbSpecs.Offset_0x08);
-                    if (numSamples <= 0) return false;
+                    if (numSamples <= 0)
+                    {
+                        return false;
+                    }
 
                     uint sampleHeadersSize = BitConverter.ToUInt32(buffer, index + FsbSpecs.Offset_0x0C);
                     uint dataSize = BitConverter.ToUInt32(buffer, index + FsbSpecs.Offset_0x10);
 
-                    if (sampleHeadersSize == 0 || dataSize == 0) return false;
+                    if (sampleHeadersSize == 0 || dataSize == 0)
+                    {
+                        return false;
+                    }
                     return true;
                 }
-                else if (versionChar >= '2' && versionChar <= '4')
+                else if (versionChar >= '2' && versionChar <= FSB_VERSION_4)
                 {
                     int numSamples = BitConverter.ToInt32(buffer, index + FsbSpecs.Offset_FSB4_NumSamples);
                     int shdrSize = BitConverter.ToInt32(buffer, index + FsbSpecs.Offset_FSB4_SHdrSize);
                     int dataSize = BitConverter.ToInt32(buffer, index + FsbSpecs.Offset_FSB4_DataSize);
 
-                    if (numSamples <= 0 || shdrSize <= 0 || dataSize <= 0) return false;
+                    if (numSamples <= 0 || shdrSize <= 0 || dataSize <= 0)
+                    {
+                        return false;
+                    }
 
                     // FSB3/4 requires sample headers to be aligned.
-                    if (shdrSize % numSamples != 0) return false;
-
-                    int singleHeaderSize = shdrSize / numSamples;
-                    if (singleHeaderSize < FsbSpecs.MinSampleHeaderSize || singleHeaderSize > FsbSpecs.MaxSampleHeaderSize) return false;
-
+                    if (shdrSize % numSamples != 0)
+                    {
+                        return false;
+                    }
                     return true;
                 }
-                else if (versionChar == '1')
+                else if (versionChar == FSB_VERSION_1)
                 {
                     // FSB1 validation is less strict due to format simplicity.
                     int numSamples = BitConverter.ToInt32(buffer, index + FsbSpecs.Offset_FSB3_NumSamples);
-                    if (numSamples <= 0) return false;
+                    if (numSamples <= 0)
+                    {
+                        return false;
+                    }
                     return true;
                 }
 
@@ -470,14 +588,17 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Analyzes a standalone .fsb file.
+        /// Analyzes a standalone .fsb file by parsing it as a single FSB container.
         /// </summary>
         /// <param name="path">The full path to the .fsb file.</param>
-        /// <param name="root">The parent <see cref="TreeNode"/> for this FSB.</param>
-        /// <param name="progressReporter">A delegate for reporting progress updates.</param>
+        /// <param name="root">The parent <see cref="TreeNode"/> which will represent this FSB file.</param>
+        /// <param name="progressReporter">A delegate for reporting detailed progress updates to the caller.</param>
         private void AnalyzeFsbFile(string path, TreeNode root, Action<string, int> progressReporter)
         {
-            if (_isClosing) return;
+            if (_isClosing)
+            {
+                return;
+            }
             root.Tag = new FsbFileNode(path, 0);
             ParseFsbFromSource(path, 0, root, progressReporter);
         }
@@ -487,7 +608,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         #region 5. FSB Parsing Methods
 
         /// <summary>
-        /// Determines the FSB version and dispatches to the appropriate parser.
+        /// Determines the FSB version from the file header and dispatches to the appropriate parser.
         /// </summary>
         /// <param name="path">The path to the source file containing the FSB data.</param>
         /// <param name="offset">The starting offset of the FSB data within the file.</param>
@@ -495,7 +616,10 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <param name="progressReporter">A delegate for reporting progress updates.</param>
         private void ParseFsbFromSource(string path, uint offset, TreeNode parentNode, Action<string, int> progressReporter)
         {
-            if (_isClosing) return;
+            if (_isClosing)
+            {
+                return;
+            }
 
             // Populate FsbFileNode with container-level details.
             if (parentNode.Tag is FsbFileNode fsbNode)
@@ -527,13 +651,13 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
             switch (version)
             {
-                case '5':
+                case FSB_VERSION_5:
                     // FSB5 is modern and well-supported by the FMOD API.
                     ParseFsbViaFmod(path, offset, parentNode, progressReporter);
                     break;
 
-                case '3':
-                case '4':
+                case FSB_VERSION_3:
+                case FSB_VERSION_4:
                     // Legacy versions (FSB3/4) often fail in the modern FMOD API.
                     // We dispatch to the custom binary parser for robust handling.
                     bool success = ParseLegacyFsb(path, offset, parentNode, version, progressReporter);
@@ -552,16 +676,17 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Parses an FSB container using the FMOD Core API.
+        /// Parses an FSB container using the FMOD Core API and registers the opened container for instant playback.
         /// </summary>
-        /// <param name="path">The path to the source file.</param>
-        /// <param name="offset">The starting offset of the FSB data.</param>
-        /// <param name="parentNode">The parent node for the sub-sounds.</param>
-        /// <param name="progressReporter">A delegate for reporting progress.</param>
+        /// <param name="path">The full path to the source file.</param>
+        /// <param name="offset">The starting offset of the FSB data within the file.</param>
+        /// <param name="parentNode">The parent <see cref="TreeNode"/> to which sub-sound nodes will be added.</param>
+        /// <param name="progressReporter">A delegate for reporting progress updates during parsing.</param>
         private void ParseFsbViaFmod(string path, uint offset, TreeNode parentNode, Action<string, int> progressReporter)
         {
             Sound sound = new Sound();
             Sound subSound = new Sound();
+            bool registrationSuccess = false;
 
             try
             {
@@ -574,13 +699,22 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     // Open the sound ignoring tags to speed up loading and avoid metadata parsing overhead.
                     if (_coreSystem.createSound(path, MODE.OPENONLY | MODE.CREATESTREAM | MODE.IGNORETAGS, ref exinfo, out sound) == RESULT.OK)
                     {
+                        // Register the open container handle with the FmodManager immediately.
+                        // This pre-caching strategy keeps the file handle open and its headers parsed,
+                        // eliminating playback latency when the user selects the sound.
+                        _fmodManager.RegisterContainer(path, offset, sound);
+                        registrationSuccess = true;
+
                         sound.getNumSubSounds(out int numSub);
 
                         if (numSub > 0)
                         {
                             for (int i = 0; i < numSub; i++)
                             {
-                                if (_isClosing) break;
+                                if (_isClosing)
+                                {
+                                    break;
+                                }
 
                                 int subSoundProgress = (int)((float)(i + 1) / numSub * 100);
                                 progressReporter($"Processing sub-sound {i + 1}/{numSub}", subSoundProgress);
@@ -622,7 +756,14 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             }
             finally
             {
-                Utilities.SafeRelease(ref sound);
+                // Do not release the main 'sound' handle if registration was successful.
+                // Its ownership is transferred to the FmodManager's cache and will be released upon application disposal
+                // to ensure the handle remains valid for playback.
+                if (!registrationSuccess)
+                {
+                    Utilities.SafeRelease(ref sound);
+                }
+                Utilities.SafeRelease(ref subSound);
             }
         }
 
@@ -806,7 +947,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
                     // Step 1: Read the main FSB header based on the version.
                     // The structures differ slightly between FSB3 and FSB4, requiring separate marshaling logic.
-                    if (version == '4')
+                    if (version == FSB_VERSION_4)
                     {
                         var header = Utilities.ReadStruct<FSB4Header>(br);
                         numSamples = header.NumSamples;
@@ -815,7 +956,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                         sampleHeaderStart = fs.Position;
                         dataStartOffset = offset + FsbSpecs.HeaderSize_FSB4 + shdrSize;
                     }
-                    else if (version == '3')
+                    else if (version == FSB_VERSION_3)
                     {
                         var header = Utilities.ReadStruct<FSB3Header>(br);
                         numSamples = header.NumSamples;
@@ -930,7 +1071,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
                         // Step 3: Handle data alignment.
                         // Some legacy formats enforce alignment boundaries (e.g., 32-byte) for data chunks.
-                        if (version == '4' || (globalMode & (uint)FsbModeFlags.Stereo) != 0)
+                        if (version == FSB_VERSION_4 || (globalMode & (uint)FsbModeFlags.Stereo) != 0)
                         {
                             if ((currentDataPointer % FsbSpecs.LegacyAlignment) != 0)
                             {
@@ -955,13 +1096,16 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         #region 6. FMOD Studio Logic Analysis
 
         /// <summary>
-        /// Analyzes a loaded bank to extract high-level FMOD Studio information like events.
+        /// Analyzes a loaded bank to extract high-level FMOD Studio information such as events and buses.
         /// </summary>
         /// <param name="path">The path to the bank file.</param>
-        /// <param name="root">The root node representing the bank.</param>
+        /// <param name="root">The root <see cref="TreeNode"/> representing the bank, to which event nodes will be added.</param>
         private void AnalyzeBankLogic(string path, TreeNode root)
         {
-            if (_isClosing || !_studioSystem.isValid()) return;
+            if (_isClosing || !_studioSystem.isValid())
+            {
+                return;
+            }
 
             RESULT res = _studioSystem.loadBankFile(path, LOAD_BANK_FLAGS.NORMAL, out Bank bank);
 
@@ -1020,11 +1164,11 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         #region 7. Helpers
 
         /// <summary>
-        /// Retrieves the internal name of an FSB container, if available.
+        /// Retrieves the internal name of an FSB container by briefly opening it to read metadata.
         /// </summary>
-        /// <param name="path">The path to the file containing the FSB.</param>
+        /// <param name="path">The path to the file containing the FSB data.</param>
         /// <param name="offset">The offset of the FSB data within the file.</param>
-        /// <returns>The internal name of the FSB, or null if it cannot be determined.</returns>
+        /// <returns>The internal name of the FSB container, or null if it cannot be determined or is empty.</returns>
         private string GetFsbInternalName(string path, uint offset)
         {
             string name = null;
@@ -1035,12 +1179,13 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 {
                     var exinfo = new CREATESOUNDEXINFO { cbsize = Marshal.SizeOf(typeof(CREATESOUNDEXINFO)), fileoffset = offset };
 
-                    // Attempt to open the stream to read the header metadata.
+                    // Attempt to open the stream just long enough to read the header metadata.
                     if (_coreSystem.createSound(path, MODE.OPENONLY | MODE.CREATESTREAM, ref exinfo, out sound) == RESULT.OK)
                     {
                         sound.getNumSubSounds(out int numSubSounds);
                         sound.getLength(out uint length, TIMEUNIT.MS);
 
+                        // A valid container should have sub-sounds and a non-zero length.
                         if (numSubSounds > 0 && length > 0)
                         {
                             sound.getName(out name, MAX_NAME_BUFFER);
@@ -1050,6 +1195,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             }
             finally
             {
+                // The sound handle is temporary and must be released immediately.
                 Utilities.SafeRelease(ref sound);
             }
             return name;

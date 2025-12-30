@@ -16,9 +16,10 @@
  *
  * Technical Environment:
  *  - Target Framework: .NET Framework 4.8
- *  - Last Update: 2025-12-24
+ *  - Last Update: 2025-12-30
  */
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
@@ -32,10 +33,16 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
     {
         #region Constants
 
-        // The separator used to parse property strings (Format: "Key: Value").
+        /// <summary>
+        /// Defines the character used to separate a property's name from its value in a string.
+        /// Expected format is "PropertyName: PropertyValue".
+        /// </summary>
         private const char PROPERTY_SEPARATOR = ':';
 
-        // Limit the split operation to 2 parts (Name and Value) to handle values that might contain colons.
+        /// <summary>
+        /// Limits the string split operation to a maximum of two parts (name and value).
+        /// This prevents issues if the property value itself contains a colon.
+        /// </summary>
         private const int MAX_SPLIT_PARTS = 2;
 
         #endregion
@@ -54,10 +61,10 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Initializes a new instance of the <see cref="DetailsViewController"/> class.
         /// </summary>
-        /// <param name="detailsListView">The ListView control where details will be displayed.</param>
+        /// <param name="detailsListView">The ListView control where details will be displayed. Must not be <c>null</c>.</param>
         public DetailsViewController(ListView detailsListView)
         {
-            _detailsListView = detailsListView;
+            _detailsListView = detailsListView ?? throw new ArgumentNullException(nameof(detailsListView));
 
             // Initialize the ListView state to ensure it starts empty.
             _detailsListView.Items.Clear();
@@ -69,9 +76,13 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         #region Public Methods
 
         /// <summary>
-        /// Updates the details view based on the selected NodeData object.
+        /// Updates the details view based on the selected <see cref="NodeData"/> object.
         /// </summary>
-        /// <param name="selection">The NodeData object containing the data to display. If null, the view is cleared.</param>
+        /// <param name="selection">The NodeData object containing the data to display. If this value is <c>null</c>, the view is cleared of all items.</param>
+        /// <remarks>
+        /// This method is designed to be called whenever the selection in the main TreeView changes.
+        /// It is safe to call even when the provided node is stale or no longer exists in the tree.
+        /// </remarks>
         public void UpdateDetails(NodeData selection)
         {
             // Handle the case where no node is selected by clearing the view.
@@ -79,6 +90,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             if (selection == null)
             {
                 _detailsListView.Items.Clear();
+                _detailsListView.Groups.Clear();
                 return;
             }
 
@@ -117,11 +129,11 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         #region Private Methods
 
         /// <summary>
-        /// Adds a single, grouped item to the ListView.
+        /// Adds a single property-value pair as a new item to the details view, organizing it under a specified group.
         /// </summary>
-        /// <param name="groupName">The header of the group for this item.</param>
-        /// <param name="propName">The name of the property being displayed.</param>
-        /// <param name="value">The value associated with the property.</param>
+        /// <param name="groupName">The logical category header under which this item will be displayed (e.g., "General", "Format").</param>
+        /// <param name="propName">The name of the property, which maps to the 'Property' column in the UI.</param>
+        /// <param name="value">The value of the property, which maps to the 'Value' column in the UI.</param>
         private void AddDetailItem(string groupName, string propName, string value)
         {
             // Ensure the item is categorized correctly by locating the target group.

@@ -19,7 +19,7 @@
  * Technical Environment:
  *  - Target Framework: .NET Framework 4.8
  *  - Key Dependencies: FMOD Core API
- *  - Last Update: 2025-12-24
+ *  - Last Update: 2025-12-30
  */
 
 using System;
@@ -35,36 +35,60 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
     /// <summary>
     /// Provides a collection of static utility methods for FMOD, file I/O, and string manipulation.
     /// </summary>
+    /// <remarks>
+    /// This class is static because its methods are stateless, pure functions that operate on their input parameters.
+    /// Centralizing these helpers here prevents code duplication and ensures consistent implementation of complex logic
+    /// like FMOD interaction and binary parsing across the application.
+    /// </remarks>
     public static class Utilities
     {
         #region Constants & Magic Numbers
 
         // Standard RIFF/WAVE header signatures.
-        private const string RiffSignature = "RIFF";
-        private const string WaveSignature = "WAVE";
-        private const string FmtSignature = "fmt ";
-        private const string DataSignature = "data";
+        private const string RIFF_SIGNATURE = "RIFF";
+        private const string WAVE_SIGNATURE = "WAVE";
+        private const string FMT_SIGNATURE = "fmt ";
+        private const string DATA_SIGNATURE = "data";
 
         // WAV format codes and sizes.
-        private const ushort WavFormatPcm = 0x0001;
-        private const ushort WavFormatFloat = 0x0003;
-        private const ushort WavFormatImaAdpcm = 0x0011;
-        private const int PcmChunkSize = 16;
-        private const int ImaAdpcmChunkSize = 20;
+        private const ushort WAV_FORMAT_PCM = 0x0001;
+        private const ushort WAV_FORMAT_FLOAT = 0x0003;
+        private const ushort WAV_FORMAT_IMA_ADPCM = 0x0011;
+        private const int PCM_CHUNK_SIZE = 16;
+        private const int IMA_ADPCM_CHUNK_SIZE = 20;
 
         // FMOD specific constants.
-        private const int MaxNameLength = 256;
+        private const int MAX_NAME_LENGTH = 256;
+        private const int MIN_VALID_SAMPLE_RATE = 100;
+        private const int FSB_HEADER_SIGNATURE_SIZE = 4;
+        private const char INVALID_FSB_VERSION_CHAR = '0';
+        private const char SANITIZATION_REPLACEMENT_CHAR = '_';
+
+        // GUID formatting constants.
+        private const int GUID_DATA4_BYTE_SIZE = 8;
+        private const int GUID_PART4_BYTE_SIZE = 2;
+        private const int GUID_PART5_BYTE_SIZE = 6;
+        private const string GUID_SEPARATOR = "-";
+
+        // IMA ADPCM specific constants for header generation.
+        private const int IMA_ADPCM_SAMPLES_PER_BLOCK = 64;
+        private const int IMA_ADPCM_BLOCK_HEADER_SIZE = 4;
+        private const int IMA_ADPCM_BLOCK_SIZE_MONO = 36;
+        private const int IMA_ADPCM_EXTRA_FMT_BYTES = 2;
+        private const ushort IMA_ADPCM_SAMPLES_PER_BLOCK_HINT = 0x0040;
+
 
         #endregion
 
         #region Struct Marshaling Helper
 
         /// <summary>
-        /// Reads bytes from the BinaryReader and marshals them into a struct.
+        /// Reads bytes from a BinaryReader and marshals them into a struct of type T.
         /// </summary>
-        /// <typeparam name="T">The struct type to read.</typeparam>
-        /// <param name="br">The BinaryReader stream.</param>
-        /// <returns>The marshaled struct.</returns>
+        /// <typeparam name="T">The struct type to read from the stream.</typeparam>
+        /// <param name="br">The binary reader to read bytes from. Must not be <c>null</c> and must have enough remaining data to fill the struct.</param>
+        /// <returns>The marshaled struct read from the underlying stream.</returns>
+        /// <exception cref="EndOfStreamException">Thrown if the stream does not contain enough bytes to populate the struct.</exception>
         public static T ReadStruct<T>(BinaryReader br) where T : struct
         {
             int size = Marshal.SizeOf(typeof(T));
@@ -73,7 +97,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             // Check if we read enough bytes to populate the struct.
             if (bytes.Length < size)
             {
-                throw new EndOfStreamException($"Could not read enough bytes for struct {typeof(T).Name}");
+                throw new EndOfStreamException($"Could not read enough bytes for struct {typeof(T).Name}.");
             }
 
             GCHandle handle = GCHandle.Alloc(bytes, GCHandleType.Pinned);
@@ -95,7 +119,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// Checks an FMOD RESULT code and throws a detailed exception if it indicates an error.
         /// </summary>
         /// <param name="result">The FMOD RESULT code to check.</param>
-        /// <exception cref="Exception">Thrown when the result is not FMOD.RESULT.OK.</exception>
+        /// <exception cref="Exception">Thrown when the result is not RESULT.OK.</exception>
         public static void CheckFmodResult(RESULT result)
         {
             if (result != RESULT.OK)
@@ -105,11 +129,12 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Safely releases an FMOD Sound object if its handle is valid.
+        /// Safely releases an FMOD <see cref="Sound"/> object if its handle is valid.
         /// </summary>
-        /// <param name="sound">The Sound object to release. Passed by reference.</param>
+        /// <param name="sound">The Sound object to release. Passed by reference to allow clearing the handle on the caller's side.</param>
         public static void SafeRelease(ref Sound sound)
         {
+            // FMOD structs are not nullable, so check for a valid handle instead of null.
             if (sound.hasHandle())
             {
                 sound.release();
@@ -118,27 +143,32 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Converts an FMOD GUID structure to its standard string representation.
+        /// Converts an FMOD <see cref="FMOD.GUID"/> structure to its standard string representation.
         /// </summary>
         /// <param name="g">The FMOD GUID to convert.</param>
         /// <returns>A string in the format "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx".</returns>
+        /// <remarks>
+        /// This conversion is necessary because FMOD's <see cref="FMOD.GUID"/> structure uses a <c>ulong</c> for the `Data4` field,
+        /// while a standard .NET <see cref="System.Guid"/> splits this into two smaller fields. This method manually
+        /// reconstructs the standard format and handles potential endianness issues.
+        /// </remarks>
         public static string GuidToString(FMOD.GUID g)
         {
             // FMOD's GUID.Data4 is a ulong, but standard GUIDs use two separate fields.
             // This logic manually reconstructs the standard format.
             byte[] rawBytes = BitConverter.GetBytes(g.Data4);
-            byte[] data4Bytes = new byte[8];
-            Array.Copy(rawBytes, data4Bytes, Math.Min(rawBytes.Length, 8));
+            byte[] data4Bytes = new byte[GUID_DATA4_BYTE_SIZE];
+            Array.Copy(rawBytes, data4Bytes, Math.Min(rawBytes.Length, GUID_DATA4_BYTE_SIZE));
 
-            // Ensure correct byte order regardless of system architecture.
+            // Ensure correct byte order (big-endian for GUID display) regardless of system architecture.
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(data4Bytes);
             }
 
-            // Extract the two parts of the final GUID section.
-            string part4 = BitConverter.ToString(data4Bytes, 0, 2).Replace("-", "");
-            string part5 = BitConverter.ToString(data4Bytes, 2, 6).Replace("-", "");
+            // Extract the two parts of the final GUID section from the 8-byte array.
+            string part4 = BitConverter.ToString(data4Bytes, 0, GUID_PART4_BYTE_SIZE).Replace(GUID_SEPARATOR, "");
+            string part5 = BitConverter.ToString(data4Bytes, GUID_PART4_BYTE_SIZE, GUID_PART5_BYTE_SIZE).Replace(GUID_SEPARATOR, "");
 
             return $"{g.Data1:X8}-{g.Data2:X4}-{g.Data3:X4}-{part4}-{part5}";
         }
@@ -146,9 +176,9 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Reads the FSB version character ('3', '4', '5', etc.) from a file at a specific offset.
         /// </summary>
-        /// <param name="path">The full path to the file.</param>
-        /// <param name="offset">The starting offset of the FSB header within the file.</param>
-        /// <returns>The FSB version character, or '0' if the header is invalid or an error occurs.</returns>
+        /// <param name="path">The full path to the file. Must be a valid and accessible path.</param>
+        /// <param name="offset">The starting offset of the FSB header within the file. Must be non-negative.</param>
+        /// <returns>The FSB version character if the 'FSB' signature is valid; otherwise, returns '0' to indicate an error or invalid header.</returns>
         public static char GetFsbVersion(string path, long offset)
         {
             try
@@ -156,16 +186,16 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                 {
                     // Verify that the file is large enough to contain the FSB header signature.
-                    if (fs.Length < offset + 4)
+                    if (fs.Length < offset + FSB_HEADER_SIGNATURE_SIZE)
                     {
-                        return '0';
+                        return INVALID_FSB_VERSION_CHAR;
                     }
 
                     fs.Seek(offset, SeekOrigin.Begin);
-                    byte[] buffer = new byte[4];
-                    if (fs.Read(buffer, 0, 4) != 4)
+                    byte[] buffer = new byte[FSB_HEADER_SIGNATURE_SIZE];
+                    if (fs.Read(buffer, 0, FSB_HEADER_SIGNATURE_SIZE) != FSB_HEADER_SIGNATURE_SIZE)
                     {
-                        return '0';
+                        return INVALID_FSB_VERSION_CHAR;
                     }
 
                     // Validate the 'FSB' signature before returning the version character.
@@ -179,9 +209,9 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             // This prevents the application from crashing during scanning operations.
             catch (Exception)
             {
-                return '0';
+                return INVALID_FSB_VERSION_CHAR;
             }
-            return '0';
+            return INVALID_FSB_VERSION_CHAR;
         }
 
         #endregion
@@ -189,14 +219,15 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         #region Audio Info Extraction
 
         /// <summary>
-        /// Extracts summary information for an entire FSB container Sound object.
+        /// Extracts summary information for an entire FSB container <see cref="Sound"/> object.
         /// </summary>
-        /// <param name="containerSound">The FMOD Sound object representing the FSB container.</param>
-        /// <returns>An <see cref="FsbContainerInfo"/> struct populated with container-level details.</returns>
+        /// <param name="containerSound">The FMOD Sound object representing the FSB container. An invalid handle is gracefully handled.</param>
+        /// <returns>A FsbContainerInfo struct populated with container-level details, or an empty struct if the sound handle is invalid.</returns>
         public static FsbContainerInfo GetFsbContainerInfo(Sound containerSound)
         {
             var info = new FsbContainerInfo();
 
+            // Use hasHandle() to check for validity instead of a null check.
             if (!containerSound.hasHandle())
             {
                 return info;
@@ -238,7 +269,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             {
                 if (containerSound.getSyncPoint(i, out IntPtr pointPtr) == RESULT.OK)
                 {
-                    if (containerSound.getSyncPointInfo(pointPtr, out string syncName, MaxNameLength, out uint offset, TIMEUNIT.MS) == RESULT.OK)
+                    if (containerSound.getSyncPointInfo(pointPtr, out string syncName, MAX_NAME_LENGTH, out uint offset, TIMEUNIT.MS) == RESULT.OK)
                     {
                         info.SyncPoints.Add($"[{i}] {syncName} @ {offset}ms");
                     }
@@ -249,19 +280,19 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Extracts detailed audio information from an FMOD Sound object.
+        /// Extracts detailed audio information from an FMOD <see cref="Sound"/> object.
         /// </summary>
-        /// <param name="sub">The FMOD Sound object representing a sub-sound.</param>
+        /// <param name="sub">The FMOD Sound object representing a sub-sound. Must have a valid handle.</param>
         /// <param name="index">The index of the sub-sound within its parent container.</param>
         /// <param name="path">The source file path of the parent container.</param>
         /// <param name="fsbChunkOffset">The offset of the FSB chunk within the source file.</param>
-        /// <returns>An <see cref="AudioInfo"/> struct populated with details from the sound object.</returns>
+        /// <returns>An AudioInfo struct populated with details from the sound object.</returns>
         public static AudioInfo GetAudioInfo(Sound sub, int index, string path, long fsbChunkOffset)
         {
             var info = new AudioInfo { Index = index, SourcePath = path, FileOffset = fsbChunkOffset };
 
             // Retrieve basic audio properties.
-            sub.getName(out info.Name, MaxNameLength);
+            sub.getName(out info.Name, MAX_NAME_LENGTH);
             sub.getLength(out info.LengthMs, TIMEUNIT.MS);
             sub.getLength(out info.LengthPcm, TIMEUNIT.PCM);
             sub.getFormat(out info.Type, out info.Format, out info.Channels, out info.Bits);
@@ -311,7 +342,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             {
                 if (sub.getSyncPoint(i, out IntPtr pointPtr) == RESULT.OK)
                 {
-                    if (sub.getSyncPointInfo(pointPtr, out string syncName, MaxNameLength, out uint offset, TIMEUNIT.MS) == RESULT.OK)
+                    if (sub.getSyncPointInfo(pointPtr, out string syncName, MAX_NAME_LENGTH, out uint offset, TIMEUNIT.MS) == RESULT.OK)
                     {
                         info.SyncPoints.Add($"[{i}] {syncName} @ {offset}ms");
                     }
@@ -352,10 +383,10 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Manually parses an FSB5 header to get the precise data offset and length for a specific sample.
         /// </summary>
-        /// <param name="filePath">The path to the file containing the FSB data.</param>
+        /// <param name="filePath">The path to the file containing the FSB data. Must not be <c>null</c>.</param>
         /// <param name="fsbChunkOffset">The starting offset of the FSB5 chunk.</param>
-        /// <param name="sampleIndex">The index of the sample to retrieve information for.</param>
-        /// <returns>A tuple containing the data offset within the FSB chunk and the data length. Returns (0, 0) on failure.</returns>
+        /// <param name="sampleIndex">The index of the sample to retrieve information for. Must be non-negative.</param>
+        /// <returns>A tuple containing the data offset within the FSB chunk and the data length. Returns (0, 0) on failure or if the index is out of bounds.</returns>
         /// <remarks>
         /// Processing steps:
         ///  1) Open the file and seek to the FSB chunk start.
@@ -430,13 +461,13 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
 
         /// <summary>
         /// Decodes a compressed or raw FMOD sound into a standard WAV format byte array.
-        /// This method serves as a robust fallback for formats not easily handled by direct streaming.
         /// </summary>
-        /// <param name="coreSystem">The FMOD Core System instance.</param>
-        /// <param name="coreSystemLock">A lock object to ensure thread-safe access to the FMOD system.</param>
+        /// <param name="coreSystem">The FMOD Core System instance. Must be initialized.</param>
+        /// <param name="coreSystemLock">A lock object to ensure thread-safe access to the FMOD system, as FMOD is not inherently thread-safe for all operations.</param>
         /// <param name="info">The <see cref="AudioInfo"/> struct describing the audio to decode.</param>
         /// <returns>A byte array representing the complete WAV file, or <c>null</c> if decoding fails.</returns>
         /// <remarks>
+        /// This method serves as a robust fallback for formats not easily handled by direct streaming.
         /// Processing steps:
         ///  1) Read the raw audio data chunk from the source file.
         ///  2) Prepend a temporary WAV/RIFF header if the format is IMA ADPCM (required for FMOD decoding).
@@ -537,7 +568,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                     sub.getFormat(out _, out SOUND_FORMAT fmt, out int ch, out int bits);
                     sub.getDefaults(out float rate, out _);
 
-                    int finalRate = (int)(rate < 100 ? info.Frequency : rate);
+                    int finalRate = (int)(rate < MIN_VALID_SAMPLE_RATE ? info.Frequency : rate);
 
                     // Step 5: Construct the final WAV file (Header + PCM Data) and return it.
                     using (MemoryStream ms = new MemoryStream())
@@ -573,7 +604,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 // Ensure native resources are released and the pinned memory is freed.
                 lock (coreSystemLock)
                 {
-                    if (sub.hasHandle() && sub.handle != s.handle)
+                    if (sub.hasHandle() && s.hasHandle() && sub.handle != s.handle)
                     {
                         sub.release();
                     }
@@ -588,45 +619,44 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Constructs a temporary RIFF header for IMA ADPCM data, required for FMOD to decode it.
+        /// Constructs a temporary RIFF header for IMA ADPCM data, which is required for FMOD to decode it from memory.
         /// </summary>
-        /// <param name="rawData">The raw IMA ADPCM byte data.</param>
-        /// <param name="channels">The number of audio channels.</param>
-        /// <param name="frequency">The sample rate of the audio.</param>
+        /// <param name="rawData">The raw IMA ADPCM byte data. Must not be <c>null</c>.</param>
+        /// <param name="channels">The number of audio channels. Must be greater than zero.</param>
+        /// <param name="frequency">The sample rate of the audio. Must be greater than zero.</param>
         /// <returns>A new byte array containing the WAV header followed by the raw data.</returns>
         public static byte[] AddImaAdpcmHeader(byte[] rawData, int channels, int frequency)
         {
             using (MemoryStream ms = new MemoryStream())
             using (BinaryWriter bw = new BinaryWriter(ms))
             {
-                bw.Write(Encoding.ASCII.GetBytes(RiffSignature));
+                bw.Write(Encoding.ASCII.GetBytes(RIFF_SIGNATURE));
                 bw.Write(36 + rawData.Length);
-                bw.Write(Encoding.ASCII.GetBytes(WaveSignature));
-                bw.Write(Encoding.ASCII.GetBytes(FmtSignature));
+                bw.Write(Encoding.ASCII.GetBytes(WAVE_SIGNATURE));
+                bw.Write(Encoding.ASCII.GetBytes(FMT_SIGNATURE));
 
                 // Write the size of the fmt chunk.
-                bw.Write(ImaAdpcmChunkSize);
+                bw.Write(IMA_ADPCM_CHUNK_SIZE);
 
                 // Write the audio format code (IMA ADPCM).
-                bw.Write(WavFormatImaAdpcm);
+                bw.Write(WAV_FORMAT_IMA_ADPCM);
 
                 bw.Write((ushort)channels);
                 bw.Write(frequency);
 
-                // Calculate Block Align and Byte Rate standard for IMA ADPCM.
-                // BlockAlign = (SamplesPerBlock * NumChannels) e.g., typically 36 * channels.
-                short blockAlign = (short)(36 * channels);
-                int byteRate = (frequency * blockAlign) / 64;
+                // Calculate Block Align and Byte Rate, which are standard for IMA ADPCM format.
+                short blockAlign = (short)(IMA_ADPCM_BLOCK_SIZE_MONO * channels);
+                int byteRate = (frequency * blockAlign) / IMA_ADPCM_SAMPLES_PER_BLOCK;
 
                 bw.Write(byteRate);
                 bw.Write(blockAlign);
 
-                // Extra format bytes.
-                bw.Write((ushort)4);
-                bw.Write((ushort)2);
-                bw.Write((ushort)0x0040); // Samples per block hint
+                // Write extra format bytes required for IMA ADPCM specification.
+                bw.Write((ushort)(IMA_ADPCM_BLOCK_HEADER_SIZE * channels));
+                bw.Write((ushort)IMA_ADPCM_EXTRA_FMT_BYTES);
+                bw.Write(IMA_ADPCM_SAMPLES_PER_BLOCK_HINT);
 
-                bw.Write(Encoding.ASCII.GetBytes(DataSignature));
+                bw.Write(Encoding.ASCII.GetBytes(DATA_SIGNATURE));
                 bw.Write(rawData.Length);
                 bw.Write(rawData);
                 return ms.ToArray();
@@ -641,25 +671,25 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <param name="channels">The number of channels (1 for mono, 2 for stereo).</param>
         /// <param name="bits">The number of bits per sample (e.g., 16).</param>
         /// <param name="isFloat"><c>true</c> if the data is 32-bit floating point; otherwise, <c>false</c>.</param>
-        /// <returns>A byte array containing the WAV header.</returns>
+        /// <returns>A byte array containing the complete WAV header.</returns>
         public static byte[] CreateWavHeader(int length, int rate, int channels, int bits, bool isFloat)
         {
             using (var ms = new MemoryStream())
             using (var bw = new BinaryWriter(ms))
             {
                 // Write RIFF chunk descriptor.
-                bw.Write(Encoding.ASCII.GetBytes(RiffSignature));
+                bw.Write(Encoding.ASCII.GetBytes(RIFF_SIGNATURE));
                 bw.Write(36 + length);
-                bw.Write(Encoding.ASCII.GetBytes(WaveSignature));
+                bw.Write(Encoding.ASCII.GetBytes(WAVE_SIGNATURE));
 
                 // Write "fmt " sub-chunk.
-                bw.Write(Encoding.ASCII.GetBytes(FmtSignature));
+                bw.Write(Encoding.ASCII.GetBytes(FMT_SIGNATURE));
 
                 // Write sub-chunk size (16 for PCM).
-                bw.Write(PcmChunkSize);
+                bw.Write(PCM_CHUNK_SIZE);
 
                 // Write audio format (1 for PCM, 3 for Float).
-                bw.Write((ushort)(isFloat ? WavFormatFloat : WavFormatPcm));
+                bw.Write((ushort)(isFloat ? WAV_FORMAT_FLOAT : WAV_FORMAT_PCM));
 
                 bw.Write((short)channels);
                 bw.Write(rate);
@@ -673,7 +703,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
                 bw.Write((short)bits);
 
                 // Write "data" sub-chunk.
-                bw.Write(Encoding.ASCII.GetBytes(DataSignature));
+                bw.Write(Encoding.ASCII.GetBytes(DATA_SIGNATURE));
                 bw.Write(length);
                 return ms.ToArray();
             }
@@ -686,8 +716,12 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Asynchronously reads the entire contents of a file into a byte array.
         /// </summary>
-        /// <param name="path">The full path to the file.</param>
+        /// <param name="path">The full path to the file. Must not be <c>null</c>.</param>
         /// <returns>A task that represents the asynchronous read operation. The task result contains the file's contents as a byte array.</returns>
+        /// <remarks>
+        /// This wrapper ensures that <see cref="FileOptions.Asynchronous"/> is used, which is critical for
+        /// achieving true non-blocking I/O in .NET Framework and maintaining UI responsiveness.
+        /// </remarks>
         public static async Task<byte[]> ReadAllBytesAsync(string path)
         {
             // Use FileOptions.Asynchronous for true non-blocking I/O in .NET Framework 4.8.
@@ -702,7 +736,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Asynchronously reads the entire contents of a file into a string using UTF-8 encoding.
         /// </summary>
-        /// <param name="path">The full path to the file.</param>
+        /// <param name="path">The full path to the file. Must not be <c>null</c>.</param>
         /// <returns>A task that represents the asynchronous read operation. The task result contains the file's contents as a string.</returns>
         public static async Task<string> ReadAllTextAsync(string path)
         {
@@ -715,22 +749,22 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         }
 
         /// <summary>
-        /// Asynchronously writes a string to a file, overwriting the file if it already exists.
+        /// Asynchronously writes a string to a file using UTF-8 encoding, overwriting the file if it already exists.
         /// </summary>
-        /// <param name="path">The full path to the file.</param>
-        /// <param name="contents">The string to write to the file.</param>
+        /// <param name="path">The full path to the file. Must not be <c>null</c>.</param>
+        /// <param name="contents">The string to write to the file. Can be <c>null</c> or empty.</param>
         /// <returns>A task that represents the asynchronous write operation.</returns>
         public static Task WriteAllTextAsync(string path, string contents)
         {
-            byte[] encodedText = Encoding.UTF8.GetBytes(contents);
+            byte[] encodedText = Encoding.UTF8.GetBytes(contents ?? string.Empty);
             return WriteAllBytesAsync(path, encodedText);
         }
 
         /// <summary>
         /// Asynchronously writes a byte array to a file, overwriting the file if it already exists.
         /// </summary>
-        /// <param name="path">The full path to the file.</param>
-        /// <param name="data">The byte array to write to the file.</param>
+        /// <param name="path">The full path to the file. Must not be <c>null</c>.</param>
+        /// <param name="data">The byte array to write to the file. Must not be <c>null</c>.</param>
         /// <returns>A task that represents the asynchronous write operation.</returns>
         public static async Task WriteAllBytesAsync(string path, byte[] data)
         {
@@ -748,7 +782,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Sanitizes a string field for CSV output by enclosing it in quotes if it contains special characters.
         /// </summary>
-        /// <param name="s">The input string.</param>
+        /// <param name="s">The input string. Can be <c>null</c>.</param>
         /// <returns>The sanitized string, suitable for a CSV field.</returns>
         public static string SanitizeCsvField(string s)
         {
@@ -771,13 +805,13 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         /// <summary>
         /// Sanitizes a string to be used as a valid file name by replacing illegal characters.
         /// </summary>
-        /// <param name="name">The proposed file name.</param>
+        /// <param name="name">The proposed file name. Can be <c>null</c> or empty.</param>
         /// <returns>A sanitized string that is safe to use as a file name.</returns>
         public static string SanitizeFileName(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
-                return "_";
+                return SANITIZATION_REPLACEMENT_CHAR.ToString();
             }
 
             // Replace common but invalid characters with their full-width equivalents for readability.
@@ -791,7 +825,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             var sb = new StringBuilder(sanitized.Length);
             foreach (char c in sanitized)
             {
-                sb.Append(Array.IndexOf(invalidChars, c) != -1 ? '_' : c);
+                sb.Append(Array.IndexOf(invalidChars, c) != -1 ? SANITIZATION_REPLACEMENT_CHAR : c);
             }
             sanitized = sb.ToString();
 
@@ -800,7 +834,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
             string nameWithoutExtension = Path.GetFileNameWithoutExtension(sanitized);
             if (FileSystemDefs.ReservedFileNames.Contains(nameWithoutExtension))
             {
-                sanitized = "_" + sanitized;
+                sanitized = SANITIZATION_REPLACEMENT_CHAR + sanitized;
             }
             return sanitized;
         }
@@ -811,7 +845,7 @@ namespace FSB_BANK_Extractor_Rebuilder_CS_GUI
         public static class FileSystemDefs
         {
             /// <summary>
-            /// A set of reserved file names on Windows that cannot be used.
+            /// A set of reserved Windows file names that cannot be used as file or directory names.
             /// </summary>
             public static readonly HashSet<string> ReservedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
